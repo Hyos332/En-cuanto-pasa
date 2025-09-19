@@ -1,0 +1,8 @@
+services:
+  slack-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tus-slack-bot
+    ports:
+      - '${PORT:-3000}:${PORT:-3000}'
