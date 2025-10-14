@@ -25,7 +25,7 @@ jobs:
         cache: 'npm'
     
     - name: Install dependencies
-      run: npm ci
+      run: npm install
     
     - name: Run linter
       run: npm run lint
@@ -51,7 +51,7 @@ jobs:
         cache: 'npm'
     
     - name: Install dependencies
-      run: npm ci
+      run: npm install
     
     - name: Run security audit
       run: npm audit --audit-level=moderate || echo "Security issues found, but continuing..."
