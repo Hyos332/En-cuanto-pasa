@@ -3,7 +3,6 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-# package-lock.json  <- Comentar o eliminar esta línea
 yarn.lock
 
 # Variables de entorno (CRÍTICO: No subir tokens/secretos)
