@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ master, develop ]  # Cambié main por master
+    branches: [ main, develop ]  # Cambiar de master a main
   pull_request:
-    branches: [ master ]           # Cambié main por master
+    branches: [ main ]           # Cambiar de master a main
 
 jobs:
   test:
@@ -61,7 +61,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: [test, security]
-    if: github.ref == 'refs/heads/master'  # Cambié main por master
+    if: github.ref == 'refs/heads/main'  # Cambiar de master a main
     
     steps:
     - name: Checkout code
