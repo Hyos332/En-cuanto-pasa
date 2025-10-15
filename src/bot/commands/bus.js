@@ -17,10 +17,17 @@ module.exports = (app) => {
     await respond({ response_type: 'ephemeral', text: '🔍 Consultando estimaciones en tiempo real y horarios programados...' });
     const realTimeData = await getTusRealTimeEstimates(stopId, routeId);
     if (realTimeData && !realTimeData.noBusesActive) {
+      const messageText = `🚌 holaa hola*TIEMPO REALLLLLLLL - Línea ${routeId} - Parada ${stopId}:*\n${formatRealTimeSchedule(realTimeData)}`;
+      
+      // DEBUG: Log del mensaje que se va a enviar
+      console.log('📤 Enviando mensaje:', messageText);
+      
       await respond({
         response_type: 'in_channel',
-        text: `🚌 holaa hola*TIEMPO REALLLLLLLL - Línea ${routeId} - Parada ${stopId}:*\n${formatRealTimeSchedule(realTimeData)}`
+        text: messageText
       });
+      
+      console.log('✅ Mensaje enviado correctamente');
       return;
     }
     const scheduleData = await getTusSchedule(stopId, routeId);
