@@ -19,7 +19,7 @@ module.exports = (app) => {
     if (realTimeData && !realTimeData.noBusesActive) {
       await respond({
         response_type: 'in_channel',
-        text: `🚌 holaa *TIEMPO REALLLLL - Línea ${routeId} - Parada ${stopId}:*\n${formatRealTimeSchedule(realTimeData)}`
+        text: `🚌 holaa hola*TIEMPO REALLLLLLLL - Línea ${routeId} - Parada ${stopId}:*\n${formatRealTimeSchedule(realTimeData)}`
       });
       return;
     }
