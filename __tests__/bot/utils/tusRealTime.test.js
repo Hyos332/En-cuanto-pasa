@@ -29,6 +29,6 @@ describe('tusRealTime utils', () => {
   test('should handle empty schedule', () => {
     const mockSchedule = { buses: [] };
     const result = formatRealTimeSchedule(mockSchedule);
-    expect(result).toContain('No hay buses');
+    expect(result).toContain('No hay información de buses en tiempo real disponible');
   });
 });
