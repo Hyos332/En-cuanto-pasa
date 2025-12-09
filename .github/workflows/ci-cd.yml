@@ -81,4 +81,4 @@ jobs:
         echo "SLACK_STATE_SECRET=$SLACK_STATE_SECRET" >> .env
         
         # Desplegar
-        docker-compose up -d --build
+        docker compose up -d --build
