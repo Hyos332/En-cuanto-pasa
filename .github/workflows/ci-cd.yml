@@ -59,9 +59,6 @@ jobs:
     if: github.ref == 'refs/heads/master'
     runs-on: self-hosted  # Usar el runner instalado en tu servidor
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
     - name: Deploy Application
       env:
         SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
@@ -69,8 +66,12 @@ jobs:
         SLACK_CLIENT_SECRET: ${{ secrets.SLACK_CLIENT_SECRET }}
         SLACK_STATE_SECRET: ${{ secrets.SLACK_STATE_SECRET }}
       run: |
-        # Ir a la carpeta del proyecto (ajusta si el runner no está en la raíz)
-        # Como el runner hace checkout, los archivos ya están aquí en el workspace actual
+        # IMPORTANTE: Ir a la carpeta REAL del proyecto en el servidor
+        # Esto es vital para mantener la carpeta 'data/' y la sesión de los usuarios
+        cd /srv/projects/en-cuanto-pasa
+        
+        # Actualizar código
+        git pull origin master
         
         # Crear archivo .env con los secretos
         echo "PORT=3000" > .env
