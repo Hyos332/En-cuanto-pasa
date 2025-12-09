@@ -13,18 +13,18 @@ async function getTusSchedule(stopId, routeId) {
   try {
     console.log(`🌐 Haciendo llamada a API para parada ${stopId}, línea ${routeId}`);
     const response = await axios.get('http://datos.santander.es/api/rest/datasets/programacionTUS_horariosLineas.json');
-    
+
     console.log(`📊 API respondió con ${response.data.resources.length} recursos`);
-    
+
     // Convertir a strings para comparación consistente
     const stopIdStr = stopId.toString();
     const routeIdStr = routeId.toString();
-    
+
     // Filtrar por línea y parada
     const schedules = response.data.resources.filter(item => {
       const itemLinea = item['ayto:linea']?.toString();
       const itemParada = item['ayto:idParada']?.toString();
-      
+
       return itemLinea === routeIdStr && itemParada === stopIdStr;
     });
 
@@ -32,20 +32,20 @@ async function getTusSchedule(stopId, routeId) {
 
     if (schedules.length === 0) {
       console.log('❌ No se encontraron horarios después del filtro');
-      
+
       // Debug: mostrar algunos items para ver la estructura
       console.log('📋 Muestra de datos para debug:');
       response.data.resources.slice(0, 3).forEach((item, i) => {
         console.log(`  ${i}: línea=${item['ayto:linea']}, parada=${item['ayto:idParada']}, nombre=${item['ayto:nombreParada']}`);
       });
-      
+
       return null;
     }
 
     // NUEVA LÓGICA: Obtener hora actual
     const now = new Date();
     const currentTimeInSeconds = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
-    
+
     console.log(`🕐 Hora actual: ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')} (${currentTimeInSeconds} segundos)`);
 
     // Convertir formato de hora, filtrar futuros y calcular tiempo restante
@@ -53,11 +53,11 @@ async function getTusSchedule(stopId, routeId) {
       .map(schedule => {
         const horaSegundos = parseInt(schedule['ayto:hora']);
         const timeFormatted = convertirHora(schedule['ayto:hora']);
-        
+
         // Calcular diferencia en minutos
         const diffInSeconds = horaSegundos - currentTimeInSeconds;
         const diffInMinutes = Math.round(diffInSeconds / 60);
-        
+
         return {
           time: timeFormatted,
           timeInSeconds: horaSegundos,
@@ -94,23 +94,23 @@ function convertirHora(horaString) {
   const totalSegundos = parseInt(horaString);
   const horas = Math.floor(totalSegundos / 3600);
   const minutos = Math.floor((totalSegundos % 3600) / 60);
-  
+
   return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;
 }
 
 async function storeInstallation(installation) {
   console.log('🔥 ENTRANDO A storeInstallation con:', JSON.stringify(installation, null, 2));
-  
+
   await fs.mkdir(DATA_DIR, { recursive: true });
   const id = installation.team?.id || installation.enterprise?.id || 'unknown';
   const filePath = path.join(DATA_DIR, `${id}.json`);
-  
+
   console.log(`💾 Guardando instalación para team: ${id} en ${filePath}`);
-  
+
   await fs.writeFile(filePath, JSON.stringify(installation, null, 2));
-  
+
   console.log(`✅ Instalación guardada correctamente`);
-  
+
   // Verificar que se escribió
   try {
     await fs.access(filePath);
@@ -123,9 +123,9 @@ async function storeInstallation(installation) {
 async function fetchInstallation(query) {
   const id = query.teamId || query.enterpriseId;
   const p = path.join(DATA_DIR, `${id}.json`);
-  
+
   console.log(`🔍 Buscando instalación: ${p}`);
-  
+
   try {
     const content = await fs.readFile(p, 'utf8');
     console.log(`✅ Instalación encontrada para team: ${id}`);
@@ -133,21 +133,21 @@ async function fetchInstallation(query) {
   } catch (error) {
     console.log(`❌ No se encontró instalación para team: ${id}`);
     console.log(`📁 Archivos en directorio data:`);
-    
+
     try {
       const files = await fs.readdir(DATA_DIR);
       console.log(`   ${files.join(', ')}`);
     } catch (dirError) {
       console.log(`   Directorio no existe: ${DATA_DIR}`);
     }
-    
+
     throw error;
   }
 }
 
 async function deleteInstallation(query) {
   const id = query.teamId || query.enterpriseId;
-  await fs.unlink(path.join(DATA_DIR, `${id}.json`)).catch(()=>{});
+  await fs.unlink(path.join(DATA_DIR, `${id}.json`)).catch(() => { });
 }
 
 const installationStore = {
@@ -173,17 +173,17 @@ const app = new App({
 // Comando para consultar horarios de bus
 app.command('/bus', async ({ ack, respond, command }) => {
   console.log('🚌 Comando /bus recibido:', command.text);
-  
+
   try {
     await ack();
     console.log('✅ ACK enviado');
-    
+
     const args = command.text.split(' ');
     const stopId = args[0];
     const routeId = args[1] || '1'; // Por defecto línea 1
-    
+
     console.log(`📍 Buscando parada: ${stopId}, línea: ${routeId}`);
-    
+
     if (!stopId) {
       await respond({
         response_type: 'ephemeral',
@@ -196,28 +196,28 @@ app.command('/bus', async ({ ack, respond, command }) => {
       response_type: 'ephemeral',
       text: '🔍 Consultando estimaciones en tiempo real y horarios programados...'
     });
-    
+
     // PRIMERO: Intentar obtener datos en tiempo real
     console.log('🔍 Llamando a getTusRealTimeEstimates...');
     const realTimeData = await getTusRealTimeEstimates(stopId, routeId);
     console.log('📊 Resultado de tiempo real:', realTimeData ? 'Datos encontrados' : 'Sin datos');
-    
+
     if (realTimeData && !realTimeData.noBusesActive) {
       // HAY BUSES ACTIVOS EN TIEMPO REAL
       await respond({
         response_type: 'in_channel',
         text: `🚌 *TIEMPO REAL - Línea ${routeId} - Parada ${stopId}:*\n${formatRealTimeSchedule(realTimeData)}`
       });
-      
+
       console.log('✅ Respuesta de tiempo real enviada correctamente');
       return;
     }
-    
+
     // SEGUNDO: Si no hay buses activos, usar horarios programados
     console.log('🔍 No hay buses activos. Consultando horarios programados...');
     const scheduleData = await getTusSchedule(stopId, routeId);
     console.log('📊 Resultado de horarios programados:', scheduleData ? 'Datos encontrados' : 'Sin datos');
-    
+
     if (!scheduleData) {
       await respond({
         response_type: 'ephemeral',
@@ -231,12 +231,12 @@ app.command('/bus', async ({ ack, respond, command }) => {
       response_type: 'in_channel',
       text: `🚌 *HORARIOS PROGRAMADOS - Línea ${routeId} - Parada ${stopId}:*\n${formatSchedule(scheduleData)}\n\n⚠️ _No hay buses activos actualmente. Mostrando horarios programados._`
     });
-    
+
     console.log('✅ Respuesta de horarios programados enviada correctamente');
-    
+
   } catch (error) {
     console.error('❌ Error en comando /bus:', error);
-    
+
     try {
       await respond({
         response_type: 'ephemeral',
@@ -253,7 +253,7 @@ function formatSchedule(schedule) {
     if (schedule.noMoreToday) {
       return '⏰ No hay más horarios para hoy. Consulta mañana.';
     }
-    
+
     if (schedule && schedule.next_departures && schedule.next_departures.length > 0) {
       const formattedList = schedule.next_departures
         .map(departure => {
@@ -261,7 +261,7 @@ function formatSchedule(schedule) {
           return `🕐 ${departure.time} (en ${departure.minutesFromNow} ${minutesText}) → ${departure.destination}`;
         })
         .join('\n');
-      
+
       return `${formattedList}\n\n⏰ _Hora actual: ${schedule.currentTime} | Horarios programados de TUS Santander_`;
     }
     return 'No hay información de horarios disponible.';
@@ -272,6 +272,27 @@ function formatSchedule(schedule) {
 }
 
 app.event('app_mention', async ({ event, client }) => {
+  // Si mencionan al bot con la palabra "ip", responder con la IP del servidor
+  if (event.text.toLowerCase().includes('ip')) {
+    try {
+      const response = await axios.get('https://api.ipify.org?format=json');
+      const ip = response.data.ip;
+      await client.chat.postMessage({
+        channel: event.channel,
+        thread_ts: event.ts,
+        text: `🌐 Mi dirección IP pública es: \`${ip}\``
+      });
+    } catch (error) {
+      console.error('Error obteniendo IP:', error);
+      await client.chat.postMessage({
+        channel: event.channel,
+        thread_ts: event.ts,
+        text: `❌ No pude obtener mi IP. Error: ${error.message}`
+      });
+    }
+    return;
+  }
+
   await client.chat.postMessage({
     channel: event.channel,
     thread_ts: event.ts,
@@ -317,18 +338,18 @@ async function getTusRealTimeEstimates(stopId, routeId) {
   try {
     console.log(`🌐 Haciendo llamada a API de tiempo real para parada ${stopId}, línea ${routeId}`);
     const response = await axios.get('https://datos.santander.es/api/rest/datasets/control_flotas_estimaciones.json');
-    
+
     console.log(`📊 API de tiempo real respondió con ${response.data.resources.length} recursos`);
-    
+
     // Convertir a strings para comparación consistente
     const stopIdStr = stopId.toString();
     const routeIdStr = routeId.toString();
-    
+
     // Filtrar por línea y parada
     const estimates = response.data.resources.filter(item => {
       const itemLinea = item['ayto:etiqLinea']?.toString();
       const itemParada = item['ayto:paradaId']?.toString();
-      
+
       return itemLinea === routeIdStr && itemParada === stopIdStr;
     });
 
@@ -336,33 +357,33 @@ async function getTusRealTimeEstimates(stopId, routeId) {
 
     if (estimates.length === 0) {
       console.log('❌ No se encontraron buses en tiempo real');
-      
+
       // Debug: mostrar algunos items para ver la estructura
       console.log('📋 Muestra de datos para debug:');
       response.data.resources.slice(0, 3).forEach((item, i) => {
         console.log(`  ${i}: línea=${item['ayto:etiqLinea']}, parada=${item['ayto:paradaId']}`);
       });
-      
+
       return null;
     }
 
     // Obtener hora actual
     const now = new Date();
-    
+
     // Procesar estimaciones
     const buses = [];
-    
+
     estimates.forEach(estimate => {
       // Procesar destino 1 si existe
       if (estimate['ayto:tiempo1'] && parseInt(estimate['ayto:tiempo1']) > 0) {
         const timeInSecondsOriginal = parseInt(estimate['ayto:tiempo1']);
-        
+
         // ⏰ RESTAR 3 MINUTOS (180 segundos) AL TIEMPO ORIGINAL
         const timeInSecondsAdjusted = Math.max(0, timeInSecondsOriginal - 180);
         const timeInMinutes = Math.round(timeInSecondsAdjusted / 60);
-        
+
         console.log(`⏰ Bus ${estimate['dc:identifier']}: Tiempo original: ${Math.round(timeInSecondsOriginal / 60)} min → Ajustado: ${timeInMinutes} min (-3 min)`);
-        
+
         // Solo agregar si el tiempo ajustado es mayor a 0
         if (timeInSecondsAdjusted > 0) {
           buses.push({
@@ -376,19 +397,19 @@ async function getTusRealTimeEstimates(stopId, routeId) {
           });
         }
       }
-      
+
       // Procesar destino 2 si existe y es diferente
-      if (estimate['ayto:tiempo2'] && 
-          parseInt(estimate['ayto:tiempo2']) > 0 && 
-          estimate['ayto:destino2'] !== estimate['ayto:destino1']) {
+      if (estimate['ayto:tiempo2'] &&
+        parseInt(estimate['ayto:tiempo2']) > 0 &&
+        estimate['ayto:destino2'] !== estimate['ayto:destino1']) {
         const timeInSecondsOriginal = parseInt(estimate['ayto:tiempo2']);
-        
+
         // ⏰ RESTAR 3 MINUTOS (180 segundos) AL TIEMPO ORIGINAL
         const timeInSecondsAdjusted = Math.max(0, timeInSecondsOriginal - 180);
         const timeInMinutes = Math.round(timeInSecondsAdjusted / 60);
-        
+
         console.log(`⏰ Bus ${estimate['dc:identifier']} (destino 2): Tiempo original: ${Math.round(timeInSecondsOriginal / 60)} min → Ajustado: ${timeInMinutes} min (-3 min)`);
-        
+
         // Solo agregar si el tiempo ajustado es mayor a 0
         if (timeInSecondsAdjusted > 0) {
           buses.push({
@@ -427,17 +448,17 @@ async function getTusRealTimeEstimates(stopId, routeId) {
 
 app.command('/realTimeBus', async ({ ack, respond, command }) => {
   console.log('🚌 Comando /realTimeBus recibido:', command.text);
-  
+
   try {
     await ack();
     console.log('✅ ACK enviado');
-    
+
     const args = command.text.split(' ');
     const stopId = args[0];
     const routeId = args[1] || '1'; // Por defecto línea 1
-    
+
     console.log(`📍 Buscando parada: ${stopId}, línea: ${routeId}`);
-    
+
     if (!stopId) {
       await respond({
         response_type: 'ephemeral',
@@ -450,11 +471,11 @@ app.command('/realTimeBus', async ({ ack, respond, command }) => {
       response_type: 'ephemeral',
       text: '🔍 Buscando estimaciones en tiempo real...'
     });
-    
+
     console.log('🔍 Llamando a getTusRealTimeEstimates...');
     const estimates = await getTusRealTimeEstimates(stopId, routeId);
     console.log('📊 Resultado de getTusRealTimeEstimates:', estimates ? 'Datos encontrados' : 'Sin datos');
-    
+
     if (!estimates) {
       await respond({
         response_type: 'ephemeral',
@@ -467,12 +488,12 @@ app.command('/realTimeBus', async ({ ack, respond, command }) => {
       response_type: 'in_channel',
       text: `🚌 *Estimaciones en Tiempo Real Línea ${routeId} - Parada ${stopId}:*\n${formatRealTimeEstimates(estimates)}`
     });
-    
+
     console.log('✅ Respuesta enviada correctamente');
-    
+
   } catch (error) {
     console.error('❌ Error en comando /realTimeBus:', error);
-    
+
     try {
       await respond({
         response_type: 'ephemeral',
@@ -489,7 +510,7 @@ function formatRealTimeEstimates(estimates) {
     if (estimates.noBusesActive) {
       return '⏰ No hay buses en camino actualmente. Consulta más tarde.';
     }
-    
+
     if (estimates && estimates.buses && estimates.buses.length > 0) {
       const formattedList = estimates.buses
         .map(bus => {
@@ -497,7 +518,7 @@ function formatRealTimeEstimates(estimates) {
           return `🚌 ${bus.destination} - ${bus.timeInMinutes} ${minutesText} (ID: ${bus.busId})`;
         })
         .join('\n');
-      
+
       return `${formattedList}\n\n⏰ _Hora actual: ${estimates.currentTime} | Estimaciones en tiempo real de TUS Santander_`;
     }
     return 'No hay información de estimaciones disponible.';
@@ -528,13 +549,13 @@ function formatRealTimeSchedule(schedule) {
     if (schedule.noBusesActive) {
       return '🚌 No hay buses activos en este momento para esta parada y línea.\n\n⏰ _Consulta en tiempo real de TUS Santander_';
     }
-    
+
     if (schedule && schedule.buses && schedule.buses.length > 0) {
       const formattedList = schedule.buses
         .map(bus => {
           const minutesText = bus.timeInMinutes === 1 ? 'minuto' : 'minutos';
           const distanceKm = (bus.distanceInMeters / 1000).toFixed(1);
-          
+
           if (bus.timeInMinutes < 1) {
             return `🚌 **LLEGANDO AHORA** → ${bus.destination}\n   📍 Distancia: ${distanceKm} km | Bus ID: ${bus.busId}`;
           } else if (bus.timeInMinutes === 1) {
@@ -544,7 +565,7 @@ function formatRealTimeSchedule(schedule) {
           }
         })
         .join('\n\n');
-      
+
       return `${formattedList}\n\n⏰ _Hora actual: ${schedule.currentTime} | 🔴 Estimaciones ajustadas (-3 min) - TUS Santander_`;
     }
     return 'No hay información de buses en tiempo real disponible.';
@@ -557,7 +578,7 @@ function formatRealTimeSchedule(schedule) {
 // Ejemplo de uso de la nueva función en un comando
 app.command('/testRealTimeSchedule', async ({ ack, respond }) => {
   await ack();
-  
+
   // Simular datos de entrada
   const scheduleData = {
     noBusesActive: false,
@@ -567,10 +588,10 @@ app.command('/testRealTimeSchedule', async ({ ack, respond }) => {
     ],
     currentTime: '14:30'
   };
-  
+
   // Formatear respuesta
   const responseText = formatRealTimeSchedule(scheduleData);
-  
+
   await respond({
     response_type: 'in_channel',
     text: responseText
