@@ -2,10 +2,10 @@ function buildScheduleBlocks(schedule, stopId, routeId) {
     if (schedule.noMoreToday) {
         return [
             {
-                type: "section",
+                type: 'section',
                 text: {
-                    type: "mrkdwn",
-                    text: "⏰ *No hay más horarios para hoy.* Consulta mañana."
+                    type: 'mrkdwn',
+                    text: '⏰ *No hay más horarios para hoy.* Consulta mañana.'
                 }
             }
         ];
@@ -13,33 +13,33 @@ function buildScheduleBlocks(schedule, stopId, routeId) {
 
     const blocks = [
         {
-            type: "header",
+            type: 'header',
             text: {
-                type: "plain_text",
+                type: 'plain_text',
                 text: `📅 Horarios Programados - Parada ${stopId} (Línea ${routeId})`,
                 emoji: true
             }
         },
         {
-            type: "context",
+            type: 'context',
             elements: [
                 {
-                    type: "mrkdwn",
+                    type: 'mrkdwn',
                     text: `🕒 Hora actual: ${schedule.currentTime}`
                 }
             ]
         },
         {
-            type: "divider"
+            type: 'divider'
         }
     ];
 
     schedule.next_departures.forEach(dep => {
         const minutesText = dep.minutesFromNow === 1 ? 'minuto' : 'minutos';
         blocks.push({
-            type: "section",
+            type: 'section',
             text: {
-                type: "mrkdwn",
+                type: 'mrkdwn',
                 text: `*${dep.time}* (en ${dep.minutesFromNow} ${minutesText})\n🚍 Destino: ${dep.destination}`
             }
         });
@@ -47,20 +47,20 @@ function buildScheduleBlocks(schedule, stopId, routeId) {
 
     blocks.push(
         {
-            type: "divider"
+            type: 'divider'
         },
         {
-            type: "actions",
+            type: 'actions',
             elements: [
                 {
-                    type: "button",
+                    type: 'button',
                     text: {
-                        type: "plain_text",
-                        text: "🔄 Actualizar",
+                        type: 'plain_text',
+                        text: '🔄 Actualizar',
                         emoji: true
                     },
                     value: JSON.stringify({ action: 'refresh_schedule', stopId, routeId }),
-                    action_id: "refresh_schedule_btn"
+                    action_id: 'refresh_schedule_btn'
                 }
             ]
         }
@@ -73,33 +73,33 @@ function buildRealTimeBlocks(estimates, stopId, routeId) {
     if (estimates.noBusesActive) {
         return [
             {
-                type: "section",
+                type: 'section',
                 text: {
-                    type: "mrkdwn",
-                    text: "🚌 *No hay buses activos en este momento* para esta parada y línea."
+                    type: 'mrkdwn',
+                    text: '🚌 *No hay buses activos en este momento* para esta parada y línea.'
                 }
             },
             {
-                type: "context",
+                type: 'context',
                 elements: [
                     {
-                        type: "mrkdwn",
-                        text: "⏰ Consulta en tiempo real de TUS Santander"
+                        type: 'mrkdwn',
+                        text: '⏰ Consulta en tiempo real de TUS Santander'
                     }
                 ]
             },
             {
-                type: "actions",
+                type: 'actions',
                 elements: [
                     {
-                        type: "button",
+                        type: 'button',
                         text: {
-                            type: "plain_text",
-                            text: "🔄 Reintentar",
+                            type: 'plain_text',
+                            text: '🔄 Reintentar',
                             emoji: true
                         },
                         value: JSON.stringify({ action: 'refresh_realtime', stopId, routeId }),
-                        action_id: "refresh_realtime_btn"
+                        action_id: 'refresh_realtime_btn'
                     }
                 ]
             }
@@ -108,45 +108,45 @@ function buildRealTimeBlocks(estimates, stopId, routeId) {
 
     const blocks = [
         {
-            type: "header",
+            type: 'header',
             text: {
-                type: "plain_text",
+                type: 'plain_text',
                 text: `🔴 Tiempo Real - Parada ${stopId} (Línea ${routeId})`,
                 emoji: true
             }
         },
         {
-            type: "context",
+            type: 'context',
             elements: [
                 {
-                    type: "mrkdwn",
+                    type: 'mrkdwn',
                     text: `🕒 Hora actual: ${estimates.currentTime} | ⚠️ Ajuste: -3 min`
                 }
             ]
         },
         {
-            type: "divider"
+            type: 'divider'
         }
     ];
 
     estimates.buses.forEach(bus => {
-        let icon = "🕒";
+        let icon = '🕒';
         let statusText = `**${bus.timeInMinutes} min**`;
 
         if (bus.timeInMinutes < 1) {
-            icon = "🚨";
-            statusText = "*LLEGANDO AHORA*";
+            icon = '🚨';
+            statusText = '*LLEGANDO AHORA*';
         } else if (bus.timeInMinutes === 1) {
-            icon = "⚠️";
-            statusText = "*1 MINUTO*";
+            icon = '⚠️';
+            statusText = '*1 MINUTO*';
         }
 
         const distanceKm = (bus.distanceInMeters / 1000).toFixed(1);
 
         blocks.push({
-            type: "section",
+            type: 'section',
             text: {
-                type: "mrkdwn",
+                type: 'mrkdwn',
                 text: `${icon} ${statusText} 🚍 → *${bus.destination}*\n   📍 Distancia: ${distanceKm} km | 🆔 Bus ID: \`${bus.busId}\``
             }
         });
@@ -154,21 +154,21 @@ function buildRealTimeBlocks(estimates, stopId, routeId) {
 
     blocks.push(
         {
-            type: "divider"
+            type: 'divider'
         },
         {
-            type: "actions",
+            type: 'actions',
             elements: [
                 {
-                    type: "button",
+                    type: 'button',
                     text: {
-                        type: "plain_text",
-                        text: "🔄 Actualizar Tiempo Real",
+                        type: 'plain_text',
+                        text: '🔄 Actualizar Tiempo Real',
                         emoji: true
                     },
-                    style: "primary",
+                    style: 'primary',
                     value: JSON.stringify({ action: 'refresh_realtime', stopId, routeId }),
-                    action_id: "refresh_realtime_btn"
+                    action_id: 'refresh_realtime_btn'
                 }
             ]
         }

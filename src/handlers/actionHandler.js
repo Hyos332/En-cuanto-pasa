@@ -13,7 +13,7 @@ async function handleRefreshSchedule({ ack, body, respond }) {
     if (!scheduleData) {
         await respond({
             replace_original: true,
-            text: `❌ No se pudo actualizar la información.`
+            text: '❌ No se pudo actualizar la información.'
         });
         return;
     }
@@ -36,7 +36,7 @@ async function handleRefreshRealTime({ ack, body, respond }) {
     if (!estimates) {
         await respond({
             replace_original: true,
-            text: `❌ No se pudo actualizar la información de tiempo real.`
+            text: '❌ No se pudo actualizar la información de tiempo real.'
         });
         return;
     }
