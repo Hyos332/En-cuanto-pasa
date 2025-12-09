@@ -258,11 +258,11 @@ function formatSchedule(schedule) {
       const formattedList = schedule.next_departures
         .map(departure => {
           const minutesText = departure.minutesFromNow === 1 ? 'minuto' : 'minutos';
-          return `🕐 ${departure.time} (en ${departure.minutesFromNow} ${minutesText}) → ${departure.destination}`;
+          return `🕐 ${departure.time} (en ${departure.minutesFromNow} ${minutesText}) 🚍 → ${departure.destination}`;
         })
         .join('\n');
 
-      return `${formattedList}\n\n⏰ _Hora actual: ${schedule.currentTime} | Horarios programados de TUS Santander_`;
+      return `${formattedList}\n\n🕒 _Hora actual: ${schedule.currentTime} | 📅 Horarios programados de TUS Santander_`;
     }
     return 'No hay información de horarios disponible.';
   } catch (error) {
@@ -557,16 +557,16 @@ function formatRealTimeSchedule(schedule) {
           const distanceKm = (bus.distanceInMeters / 1000).toFixed(1);
 
           if (bus.timeInMinutes < 1) {
-            return `🚌 **LLEGANDO AHORA** → ${bus.destination}\n   📍 Distancia: ${distanceKm} km | Bus ID: ${bus.busId}`;
+            return `🚨 **LLEGANDO AHORA** 🚍 → ${bus.destination}\n   📍 Distancia: ${distanceKm} km | 🆔 Bus ID: ${bus.busId}`;
           } else if (bus.timeInMinutes === 1) {
-            return `🚌 **1 MINUTO** → ${bus.destination}\n   📍 Distancia: ${distanceKm} km | Bus ID: ${bus.busId}`;
+            return `⚠️ **1 MINUTO** 🚍 → ${bus.destination}\n   📍 Distancia: ${distanceKm} km | 🆔 Bus ID: ${bus.busId}`;
           } else {
-            return `🚌 **${bus.timeInMinutes} minutos** → ${bus.destination}\n   📍 Distancia: ${distanceKm} km | Bus ID: ${bus.busId}`;
+            return `🕒 **${bus.timeInMinutes} minutos** 🚍 → ${bus.destination}\n   📍 Distancia: ${distanceKm} km | 🆔 Bus ID: ${bus.busId}`;
           }
         })
         .join('\n\n');
 
-      return `${formattedList}\n\n⏰ _Hora actual: ${schedule.currentTime} | 🔴 Estimaciones ajustadas (-3 min) - TUS Santander_`;
+      return `${formattedList}\n\n🕒 _Hora actual: ${schedule.currentTime} | 🔴 Estimaciones ajustadas (-3 min) - TUS Santander_`;
     }
     return 'No hay información de buses en tiempo real disponible.';
   } catch (error) {
