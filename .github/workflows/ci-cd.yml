@@ -70,8 +70,9 @@ jobs:
         # Esto es vital para mantener la carpeta 'data/' y la sesión de los usuarios
         cd /srv/projects/en-cuanto-pasa
         
-        # Actualizar código
-        git pull origin master
+        # Actualizar código (forzando el estado del repositorio)
+        git fetch origin master
+        git reset --hard origin/master
         
         # Crear archivo .env con los secretos
         echo "PORT=3000" > .env
