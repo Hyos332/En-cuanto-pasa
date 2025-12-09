@@ -75,11 +75,12 @@ jobs:
         git reset --hard origin/master
         
         # Crear archivo .env con los secretos
-        echo "PORT=3000" > .env
+        echo "PORT=3005" > .env
         echo "SLACK_SIGNING_SECRET=$SLACK_SIGNING_SECRET" >> .env
         echo "SLACK_CLIENT_ID=$SLACK_CLIENT_ID" >> .env
         echo "SLACK_CLIENT_SECRET=$SLACK_CLIENT_SECRET" >> .env
         echo "SLACK_STATE_SECRET=$SLACK_STATE_SECRET" >> .env
         
-        # Desplegar
+        # Desplegar (primero bajar para liberar puerto)
+        docker compose down
         docker compose up -d --build
