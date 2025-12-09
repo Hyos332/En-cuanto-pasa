@@ -71,5 +71,5 @@ app.command('/bushelp', async ({ ack, respond }) => {
 
 (async () => {
   await app.start(process.env.PORT || 3000);
-  console.log('⚡️ Bot (Refactorizado) corriendo en puerto ' + (process.env.PORT || 3000));
+  console.log('⚡️ Bot (Refactorizado v2 - CON BOTONES) corriendo en puerto ' + (process.env.PORT || 3000));
 })();
