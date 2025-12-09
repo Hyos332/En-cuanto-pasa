@@ -69,6 +69,14 @@ app.command('/bushelp', async ({ ack, respond }) => {
   });
 });
 
+app.command('/botversion', async ({ ack, respond }) => {
+  await ack();
+  await respond({
+    response_type: 'ephemeral',
+    text: `🤖 **Versión del Bot:** v2.0.0 (Refactorizado con Botones) - ${new Date().toISOString()}`
+  });
+});
+
 (async () => {
   await app.start(process.env.PORT || 3000);
   console.log('⚡️ Bot (Refactorizado v2 - CON BOTONES) corriendo en puerto ' + (process.env.PORT || 3000));
