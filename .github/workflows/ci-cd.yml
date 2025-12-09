@@ -56,30 +56,28 @@ jobs:
 
   deploy:
     needs: [test, security]
-    if: github.ref == 'refs/heads/master'                                                                                                                  
-    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    runs-on: self-hosted  # Usar el runner instalado en tu servidor
     steps:
-    - name: Deploy to Server
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.DEPLOY_HOST }}
-        username: ${{ secrets.DEPLOY_USER }}
-        password: ${{ secrets.DEPLOY_PASSWORD }}
-        port: ${{ secrets.DEPLOY_PORT }}
-        envs: SLACK_SIGNING_SECRET,SLACK_CLIENT_ID,SLACK_CLIENT_SECRET,SLACK_STATE_SECRET
-        script: |
-          cd /srv/projects/en-cuanto-pasa
-          git pull origin master
-          # Crear archivo .env con los secretos
-          echo "PORT=3000" > .env
-          echo "SLACK_SIGNING_SECRET=$SLACK_SIGNING_SECRET" >> .env
-          echo "SLACK_CLIENT_ID=$SLACK_CLIENT_ID" >> .env
-          echo "SLACK_CLIENT_SECRET=$SLACK_CLIENT_SECRET" >> .env
-          echo "SLACK_STATE_SECRET=$SLACK_STATE_SECRET" >> .env
-          # Desplegar
-          docker-compose up -d --build
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Deploy Application
       env:
         SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
         SLACK_CLIENT_ID: ${{ secrets.SLACK_CLIENT_ID }}
         SLACK_CLIENT_SECRET: ${{ secrets.SLACK_CLIENT_SECRET }}
         SLACK_STATE_SECRET: ${{ secrets.SLACK_STATE_SECRET }}
+      run: |
+        # Ir a la carpeta del proyecto (ajusta si el runner no está en la raíz)
+        # Como el runner hace checkout, los archivos ya están aquí en el workspace actual
+        
+        # Crear archivo .env con los secretos
+        echo "PORT=3000" > .env
+        echo "SLACK_SIGNING_SECRET=$SLACK_SIGNING_SECRET" >> .env
+        echo "SLACK_CLIENT_ID=$SLACK_CLIENT_ID" >> .env
+        echo "SLACK_CLIENT_SECRET=$SLACK_CLIENT_SECRET" >> .env
+        echo "SLACK_STATE_SECRET=$SLACK_STATE_SECRET" >> .env
+        
+        # Desplegar
+        docker-compose up -d --build
