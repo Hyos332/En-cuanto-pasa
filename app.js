@@ -85,5 +85,9 @@ app.command('/botversion', async ({ ack, respond }) => {
 (async () => {
   await app.start(process.env.PORT || 3000);
   await initSchedules(app);
-  console.log('⚡️ Bot (Refactorizado v2 - CON BOTONES) corriendo en puerto ' + (process.env.PORT || 3000));
+  console.log('='.repeat(80));
+  console.log('⚡️ BOT INICIADO - VERSION 3.0.0 - KRONOS ENABLED');
+  console.log('🕒 Timestamp:', new Date().toISOString());
+  console.log('🔌 Puerto:', process.env.PORT || 3000);
+  console.log('='.repeat(80));
 })();

@@ -5,8 +5,11 @@ const schedule = require('node-schedule');
 const jobs = {};
 
 const handleLoginCommand = async ({ ack, body, client }) => {
+    console.log('🔐 [KRONOS] Comando /login recibido');
+    console.log('🔐 [KRONOS] User ID:', body.user_id);
     await ack();
     try {
+        console.log('🔐 [KRONOS] Abriendo modal de login...');
         await client.views.open({
             trigger_id: body.trigger_id,
             view: {
@@ -30,8 +33,9 @@ const handleLoginCommand = async ({ ack, body, client }) => {
                 submit: { type: 'plain_text', text: 'Guardar' }
             }
         });
+        console.log('🔐 [KRONOS] Modal abierto exitosamente');
     } catch (error) {
-        console.error(error);
+        console.error('🔐 [KRONOS] ERROR abriendo modal:', error);
     }
 };
 
