@@ -3,6 +3,7 @@ const { App } = require('@slack/bolt');
 const installationStore = require('./src/utils/installationStore');
 const { handleBusCommand, handleRealTimeBusCommand } = require('./src/handlers/busHandler');
 const { handleRefreshSchedule, handleRefreshRealTime } = require('./src/handlers/actionHandler');
+const { handleLoginCommand, handleLoginSubmission, handleScheduleCommand, initSchedules } = require('./src/handlers/kronosHandler');
 const axios = require('axios');
 const config = require('./src/config');
 
@@ -23,6 +24,10 @@ const app = new App({
 // --- COMANDOS ---
 app.command('/bus', handleBusCommand);
 app.command('/realTimeBus', handleRealTimeBusCommand);
+
+app.command('/login', handleLoginCommand);
+app.view('kronos_login_modal', handleLoginSubmission);
+app.command('/programar', handleScheduleCommand);
 
 // --- ACCIONES (BOTONES) ---
 app.action('refresh_schedule_btn', handleRefreshSchedule);
@@ -79,5 +84,6 @@ app.command('/botversion', async ({ ack, respond }) => {
 
 (async () => {
   await app.start(process.env.PORT || 3000);
+  await initSchedules(app);
   console.log('⚡️ Bot (Refactorizado v2 - CON BOTONES) corriendo en puerto ' + (process.env.PORT || 3000));
 })();
