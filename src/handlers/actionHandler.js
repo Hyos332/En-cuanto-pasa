@@ -19,7 +19,7 @@ async function handleRefreshSchedule({ ack, body, respond }) {
     }
 
     await respond({
-        replace_original: true, // Reemplaza el mensaje original
+        replace_original: true,
         blocks: buildScheduleBlocks(scheduleData, stopId, routeId),
         text: `Horarios actualizados parada ${stopId}`
     });
