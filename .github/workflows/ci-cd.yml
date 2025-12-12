@@ -66,3 +66,22 @@ jobs:
         SLACK_CLIENT_SECRET: ${{ secrets.SLACK_CLIENT_SECRET }}
         SLACK_STATE_SECRET: ${{ secrets.SLACK_STATE_SECRET }}
       run: |
+        # IMPORTANTE: Ir a la carpeta REAL del proyecto en el servidor
+        # Esto es vital para mantener la carpeta 'data/' y la sesión de los usuarios
+        cd /srv/projects/en-cuanto-pasa
+        
+        # Actualizar código (forzando el estado del repositorio)
+        git fetch origin master
+        git reset --hard origin/master
+        
+        # Crear archivo .env con los secretos
+        echo "PORT=3005" > .env
+        echo "SLACK_SIGNING_SECRET=$SLACK_SIGNING_SECRET" >> .env
+        echo "SLACK_CLIENT_ID=$SLACK_CLIENT_ID" >> .env
+        echo "SLACK_CLIENT_SECRET=$SLACK_CLIENT_SECRET" >> .env
+        echo "SLACK_STATE_SECRET=$SLACK_STATE_SECRET" >> .env
+        
+        # Desplegar (primero bajar para liberar puerto, luego forzar rebuild)
+        docker compose down
+        docker rmi en-cuanto-pasa-slack-bot || true
+        docker compose up -d --build --force-recreate
