@@ -20,7 +20,7 @@ async function stopTimer(username, password) {
         await page.type('input[name="password"]', password);
 
         const loginButton = await page.$('button[type="submit"]') ||
-            (await page.$x("//button[contains(., 'Acceder')]"))[0];
+            (await page.$x('//button[contains(., "Acceder")]'))[0];
 
         if (loginButton) {
             await Promise.all([
@@ -36,7 +36,7 @@ async function stopTimer(username, password) {
         await new Promise(r => setTimeout(r, 2000));
 
         const stopBtn = await page.$('.btn-stop') ||
-            (await page.$x("//button[contains(., 'Detener')]"))[0];
+            (await page.$x('//button[contains(., "Detener")]'))[0];
 
         if (stopBtn) {
             console.log('[Kronos] Stop button found. Clicking...');
@@ -44,7 +44,7 @@ async function stopTimer(username, password) {
             await new Promise(r => setTimeout(r, 3000));
 
             const startBtnCheck = await page.$('.btn-start') ||
-                (await page.$x("//button[contains(., 'Iniciar')]"))[0];
+                (await page.$x('//button[contains(., "Iniciar")]'))[0];
 
             if (startBtnCheck) {
                 return { success: true, message: 'Timer stopped successfully.' };
@@ -53,7 +53,7 @@ async function stopTimer(username, password) {
         }
 
         const startBtn = await page.$('.btn-start') ||
-            (await page.$x("//button[contains(., 'Iniciar')]"))[0];
+            (await page.$x('//button[contains(., "Iniciar")]'))[0];
 
         if (startBtn) {
             console.log('[Kronos] Timer was already stopped.');

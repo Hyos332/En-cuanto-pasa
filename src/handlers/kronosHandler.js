@@ -49,7 +49,7 @@ const handleLoginSubmission = async ({ ack, view, body, client }) => {
             text: '✅ Credenciales de Kronos guardadas correctamente.'
         });
     } catch (e) {
-        console.error("Could not send DM", e);
+        console.error('Could not send DM', e);
     }
 };
 
@@ -108,7 +108,7 @@ function scheduleJob(slackId, time, client) {
             console.log(`No credentials found for ${slackId}`);
             await client.chat.postMessage({
                 channel: slackId,
-                text: `❌ No se encontraron credenciales para ejecutar el apagado. Usa /login primero.`
+                text: '❌ No se encontraron credenciales para ejecutar el apagado. Usa /login primero.'
             });
         }
     });
@@ -122,7 +122,7 @@ const initSchedules = async (app) => {
         });
         console.log(`Loaded ${schedules.length} schedules.`);
     } catch (e) {
-        console.error("Error loading schedules", e);
+        console.error('Error loading schedules', e);
     }
 };
 
