@@ -40,20 +40,27 @@ const handleLoginCommand = async ({ ack, body, client }) => {
 };
 
 const handleLoginSubmission = async ({ ack, view, body, client }) => {
+    console.log('📝 [KRONOS] Recibido envío de formulario (Submission)');
+    // IMPORTANTE: Debemos responder a Slack en < 3 segundos
     await ack();
-    const username = view.state.values.user_block.username.value;
-    const password = view.state.values.pass_block.password.value;
-    const slackId = body.user.id;
-
-    await db.saveUser(slackId, username, password);
+    console.log('✅ [KRONOS] Ack enviado a Slack');
 
     try {
+        const username = view.state.values.user_block.username.value;
+        const password = view.state.values.pass_block.password.value;
+        const slackId = body.user.id;
+
+        console.log(`💾 [KRONOS] Intentando guardar usuario ${username} para Slack ID ${slackId}`);
+        await db.saveUser(slackId, username, password);
+        console.log('💾 [KRONOS] Guardado en DB exitoso');
+
         await client.chat.postMessage({
             channel: slackId,
             text: '✅ Credenciales de Kronos guardadas correctamente.'
         });
-    } catch (e) {
-        console.error('Could not send DM', e);
+        console.log('📨 [KRONOS] Mensaje de confirmación enviado');
+    } catch (error) {
+        console.error('❌ [KRONOS] Error crítico en submission:', error);
     }
 };
 
