@@ -2,9 +2,14 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-COPY ./ ./
+# Instalar dependencias de sistema necesarias para compilar módulos nativos (como sqlite3)
+RUN apk add --no-cache python3 make g++
 
-RUN npm install axios @slack/bolt dotenv && \
-    npm install
+COPY package*.json ./
+
+# Instalar dependencias de Node
+RUN npm install
+
+COPY ./ ./
 
 CMD ["node", "app.js"]
