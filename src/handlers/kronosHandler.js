@@ -94,7 +94,8 @@ const handleScheduleCommand = async ({ ack, command, client }) => {
 
     await db.saveSchedule(slackId, time);
 
-    scheduleJob(slackId, time, client);
+    // Legacy support: Single shot schedule
+    scheduleJob(slackId, time, 'STOP', client);
 
     await client.chat.postMessage({
         channel: slackId,
@@ -102,51 +103,99 @@ const handleScheduleCommand = async ({ ack, command, client }) => {
     });
 };
 
-function scheduleJob(slackId, time, client) {
-    if (jobs[slackId]) jobs[slackId].cancel();
+// Función genérica para programar un trabajo con node-schedule
+function scheduleJob(slackId, time, type, client, dayOfWeek = null) {
+    // ID único para el trabajo: slackId + tipo + dia (si aplica)
+    const jobKey = `${slackId}_${type}${dayOfWeek !== null ? '_' + dayOfWeek : ''}`;
+
+    if (jobs[jobKey]) jobs[jobKey].cancel();
 
     const [hour, minute] = time.split(':');
     const rule = new schedule.RecurrenceRule();
     rule.hour = parseInt(hour);
     rule.minute = parseInt(minute);
+    if (dayOfWeek !== null) rule.dayOfWeek = dayOfWeek; // 0-6 (Dom-Sab) en node-schedule
     rule.tz = 'Europe/Madrid';
 
-    console.log(`Scheduling job for ${slackId} at ${time} Europe/Madrid`);
+    console.log(`📅 Scheduling ${type} for ${slackId} at ${time} (Day: ${dayOfWeek ?? 'Everyday'})`);
 
-    jobs[slackId] = schedule.scheduleJob(rule, async () => {
-        console.log(`Running Kronos job for ${slackId}`);
+    jobs[jobKey] = schedule.scheduleJob(rule, async () => {
+        console.log(`🚀 Running Kronos ${type} job for ${slackId}`);
         const user = await db.getUser(slackId);
+
         if (user) {
             try {
-                const result = await kronosService.stopTimer(user.kronos_user, user.kronos_password);
+                let result;
+                if (type === 'START') {
+                    result = await kronosService.startTimer(user.kronos_user, user.kronos_password);
+                } else {
+                    result = await kronosService.stopTimer(user.kronos_user, user.kronos_password);
+                }
+
                 await client.chat.postMessage({
                     channel: slackId,
-                    text: `🤖 Ejecución Kronos: ${result.message}`
+                    text: `🤖 **Kronos ${type === 'START' ? 'Inicio' : 'Fin'}**: ${result.message}`
                 });
             } catch (e) {
                 console.error(e);
                 await client.chat.postMessage({
                     channel: slackId,
-                    text: `❌ Error ejecutando Kronos: ${e.message}`
+                    text: `❌ Error Kronos (${type}): ${e.message}`
                 });
             }
         } else {
             console.log(`No credentials found for ${slackId}`);
-            await client.chat.postMessage({
-                channel: slackId,
-                text: '❌ No se encontraron credenciales para ejecutar el apagado. Usa /login primero.'
-            });
         }
     });
 }
 
+// Cargar y reprogramar TODO el horario de un usuario (Hot Reload)
+const reloadUserSchedule = async (slackId, client) => {
+    console.log(`🔄 Reloading schedules for ${slackId}...`);
+
+    // 1. Cancelar todos los trabajos existentes de este usuario
+    Object.keys(jobs).forEach(key => {
+        if (key.startsWith(slackId)) {
+            jobs[key].cancel();
+            delete jobs[key];
+        }
+    });
+
+    // 2. Cargar horario semanal nuevo
+    const weeklySchedules = await db.getWeeklySchedule(slackId);
+
+    // Mapeo de días: Panel usa 1=Lunes..5=Viernes. Node-schedule usa 0=Domingo..6=Sabado.
+    // Panel (Front): 1 (Lun) -> Node: 1 (Lun). Coincide.
+
+    weeklySchedules.forEach(s => {
+        if (s.is_active) {
+            if (s.start_time) scheduleJob(slackId, s.start_time, 'START', client, s.day_of_week);
+            if (s.end_time) scheduleJob(slackId, s.end_time, 'STOP', client, s.day_of_week);
+        }
+    });
+
+    console.log(`✅ Schedules reloaded for ${slackId}.`);
+};
+
+
 const initSchedules = async (app) => {
     try {
-        const schedules = await db.getAllSchedules();
-        schedules.forEach(s => {
-            scheduleJob(s.slack_id, s.time, app.client);
+        // 1. Cargar Legacy (Solo STOP diario)
+        const oldSchedules = await db.getAllSchedules();
+        oldSchedules.forEach(s => {
+            scheduleJob(s.slack_id, s.time, 'STOP', app.client);
         });
-        console.log(`Loaded ${schedules.length} schedules.`);
+
+        // 2. Cargar Sistema Nuevo (Semanal START/STOP)
+        const weekly = await db.getAllWeeklySchedules();
+        weekly.forEach(s => {
+            // Evitar duplicados si ya existe legacy (el sistema nuevo manda sobre el viejo)
+            // Pero por simplicidad, cargamos todo. Lo ideal es que el usuario migre.
+            if (s.start_time) scheduleJob(s.slack_id, s.start_time, 'START', app.client, s.day_of_week);
+            if (s.end_time) scheduleJob(s.slack_id, s.end_time, 'STOP', app.client, s.day_of_week);
+        });
+
+        console.log(`📅 System initialized with ${Object.keys(jobs).length} active jobs.`);
     } catch (e) {
         console.error('Error loading schedules', e);
     }
@@ -157,5 +206,6 @@ module.exports = {
     handlePanelCommand,
     handleScheduleCommand,
     initSchedules,
+    reloadUserSchedule, // Exportado para usar en API
     tokenStore
 };

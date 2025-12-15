@@ -96,4 +96,84 @@ async function stopTimer(username, password) {
     }
 }
 
-module.exports = { stopTimer };
+async function startTimer(username, password) {
+    let browser;
+    try {
+        browser = await puppeteer.launch({
+            headless: true,
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        const page = await browser.newPage();
+
+        // Función auxiliar local
+        const findElementByText = async (selector, text) => {
+            return page.evaluateHandle((selector, text) => {
+                // eslint-disable-next-line no-undef
+                const elements = [...document.querySelectorAll(selector)];
+                return elements.find(el => el.innerText.includes(text));
+            }, selector, text);
+        };
+
+        console.log(`[Kronos] Attempting START for user: ${username}`);
+        await page.goto(KRONOS_URL, { waitUntil: 'networkidle2' });
+
+        await page.waitForSelector('input[name="user"]');
+
+        await page.type('input[name="user"]', username);
+        await page.type('input[name="password"]', password);
+
+        // Login
+        let loginButton = await page.$('button[type="submit"]');
+        if (!loginButton) {
+            const btnHandle = await findElementByText('button', 'Acceder');
+            if (btnHandle.asElement()) loginButton = btnHandle.asElement();
+        }
+
+        if (loginButton) {
+            await Promise.all([
+                page.waitForNavigation({ waitUntil: 'networkidle2' }),
+                loginButton.click()
+            ]);
+        } else {
+            throw new Error('Login button not found');
+        }
+
+        console.log('[Kronos] Logged in. Checking timer status for START...');
+        await new Promise(r => setTimeout(r, 2000));
+
+        // Buscar botón Iniciar
+        let startBtn = await page.$('.btn-start');
+        if (!startBtn) {
+            const btnHandle = await findElementByText('button', 'Iniciar');
+            if (btnHandle.asElement()) startBtn = btnHandle.asElement();
+        }
+
+        if (startBtn) {
+            console.log('[Kronos] Start button found. Clicking...');
+            await startBtn.click();
+            return { success: true, message: 'Jornada INICIADA correctamente. ☀️' };
+        }
+
+        // Si no hay botón iniciar, quizás ya está iniciado (boton Detener visible)
+        let stopBtn = await page.$('.btn-stop');
+        if (!stopBtn) {
+            const btnHandle = await findElementByText('button', 'Detener');
+            if (btnHandle.asElement()) stopBtn = btnHandle.asElement();
+        }
+
+        if (stopBtn) {
+            return { success: true, message: 'La jornada ya estaba iniciada. ✅' };
+        }
+
+        return { success: false, message: 'No se encontró botón Iniciar ni Detener.' };
+
+    } catch (error) {
+        console.error('Kronos Start Error:', error);
+        return { success: false, message: `Error: ${error.message}` };
+    } finally {
+        if (browser) await browser.close();
+    }
+}
+
+module.exports = { stopTimer, startTimer };

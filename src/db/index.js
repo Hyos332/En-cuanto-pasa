@@ -86,6 +86,17 @@ module.exports = {
                 });
         });
     },
+    getAllWeeklySchedules: () => {
+        return new Promise((resolve, reject) => {
+            db.all('SELECT w.*, u.kronos_user, u.kronos_password ' +
+                'FROM weekly_schedules w ' +
+                'JOIN users u ON w.slack_id = u.slack_id ' +
+                'WHERE w.is_active = 1', [], (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows);
+                });
+        });
+    },
     getAllSchedules: () => {
         return new Promise((resolve, reject) => {
             db.all('SELECT s.slack_id, s.time, u.kronos_user, u.kronos_password ' +

@@ -5,7 +5,7 @@ const path = require('path');
 const installationStore = require('./src/utils/installationStore');
 const { handleBusCommand, handleRealTimeBusCommand } = require('./src/handlers/busHandler');
 const { handleRefreshSchedule, handleRefreshRealTime } = require('./src/handlers/actionHandler');
-const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, initSchedules, tokenStore } = require('./src/handlers/kronosHandler');
+const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, initSchedules, reloadUserSchedule, tokenStore } = require('./src/handlers/kronosHandler');
 const axios = require('axios');
 const config = require('./src/config');
 const db = require('./src/db'); // Necesario para la API
@@ -74,6 +74,10 @@ receiver.router.post('/api/schedule', async (req, res) => {
         day.active
       );
     }
+
+    // HOT RELOAD: Recargar tareas en memoria inmediatamente
+    await reloadUserSchedule(session.slackId, app.client);
+
     res.json({ success: true });
   } catch (e) {
     console.error(e);
