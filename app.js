@@ -21,6 +21,16 @@ const app = new App({
   port: process.env.PORT || 3000
 });
 
+// Middleware de Debug Global
+app.use(async ({ logger, body, next }) => {
+  console.log('📡 [DEBUG] Petición entrante de Slack:');
+  if (body.type) console.log('   Tipo:', body.type);
+  if (body.command) console.log('   Comando:', body.command);
+  if (body.view) console.log('   View Callback ID:', body.view.callback_id);
+  if (body.actions) console.log('   Action ID:', body.actions[0].action_id);
+  await next();
+});
+
 // --- COMANDOS ---
 app.command('/bus', handleBusCommand);
 app.command('/realTimeBus', handleRealTimeBusCommand);
