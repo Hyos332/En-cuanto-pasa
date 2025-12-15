@@ -4,38 +4,43 @@ const schedule = require('node-schedule');
 
 const jobs = {};
 
-const handleLoginCommand = async ({ ack, body, client }) => {
-    console.log('🔐 [KRONOS] Comando /login recibido');
-    console.log('🔐 [KRONOS] User ID:', body.user_id);
+const handleLoginCommand = async ({ ack, command, client }) => {
+    // IMPORTANTE: Responder inmediatamente para evitar timeout
     await ack();
-    try {
-        console.log('🔐 [KRONOS] Abriendo modal de login...');
-        await client.views.open({
-            trigger_id: body.trigger_id,
-            view: {
-                type: 'modal',
-                callback_id: 'kronos_login_modal',
-                title: { type: 'plain_text', text: 'Login Kronos' },
-                blocks: [
-                    {
-                        type: 'input',
-                        block_id: 'user_block',
-                        element: { type: 'plain_text_input', action_id: 'username' },
-                        label: { type: 'plain_text', text: 'Usuario' }
-                    },
-                    {
-                        type: 'input',
-                        block_id: 'pass_block',
-                        element: { type: 'plain_text_input', action_id: 'password' },
-                        label: { type: 'plain_text', text: 'Contraseña' }
-                    }
-                ],
-                submit: { type: 'plain_text', text: 'Guardar' }
-            }
+
+    console.log('🔐 [KRONOS] Comando /login recibido (Modo Texto Directo)');
+
+    const args = command.text.trim().split(/\s+/);
+
+    // Validar argumentos
+    if (args.length < 2) {
+        await client.chat.postMessage({
+            channel: command.user_id,
+            text: '⚠️ **Formato incorrecto.**\n\nUso correcto:\n`/login [usuario] [contraseña]`\n\nEjemplo: `/login pepe.perez miClave123`'
         });
-        console.log('🔐 [KRONOS] Modal abierto exitosamente');
+        return;
+    }
+
+    const username = args[0];
+    const password = args[1]; // Tomamos el segundo argumento (o el resto si fuera necesario unirlo)
+    const slackId = command.user_id;
+
+    try {
+        console.log(`💾 [KRONOS] Guardando credenciales para ${slackId}`);
+        await db.saveUser(slackId, username, password);
+
+        await client.chat.postMessage({
+            channel: slackId,
+            text: `✅ **¡Login Exitoso!**\n\nUsuario guardado: \`${username}\`\nAhora puedes usar \`/programar HH:MM\` para automatizar tu salida.`
+        });
+        console.log('💾 [KRONOS] Guardado exitoso');
+
     } catch (error) {
-        console.error('🔐 [KRONOS] ERROR abriendo modal:', error);
+        console.error('❌ [KRONOS] Error guardando credenciales:', error);
+        await client.chat.postMessage({
+            channel: slackId,
+            text: '❌ Hubo un error guardando tus datos. Inténtalo de nuevo.'
+        });
     }
 };
 
