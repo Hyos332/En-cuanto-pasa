@@ -12,6 +12,15 @@ async function stopTimer(username, password) {
         });
         const page = await browser.newPage();
 
+        // Función auxiliar para buscar elementos por texto (reemplazo de $x)
+        const findElementByText = async (selector, text) => {
+            return page.evaluateHandle((selector, text) => {
+                // eslint-disable-next-line no-undef
+                const elements = [...document.querySelectorAll(selector)];
+                return elements.find(el => el.innerText.includes(text));
+            }, selector, text);
+        };
+
         console.log(`[Kronos] Attempting login for user: ${username}`);
         await page.goto(KRONOS_URL, { waitUntil: 'networkidle2' });
 
@@ -20,8 +29,12 @@ async function stopTimer(username, password) {
         await page.type('input[name="user"]', username);
         await page.type('input[name="password"]', password);
 
-        const loginButton = await page.$('button[type="submit"]') ||
-            (await page.$x('//button[contains(., "Acceder")]'))[0];
+        // Buscar botón de Acceder
+        let loginButton = await page.$('button[type="submit"]');
+        if (!loginButton) {
+            const btnHandle = await findElementByText('button', 'Acceder');
+            if (btnHandle.asElement()) loginButton = btnHandle.asElement();
+        }
 
         if (loginButton) {
             await Promise.all([
@@ -36,16 +49,24 @@ async function stopTimer(username, password) {
 
         await new Promise(r => setTimeout(r, 2000));
 
-        const stopBtn = await page.$('.btn-stop') ||
-            (await page.$x('//button[contains(., "Detener")]'))[0];
+        // Buscar botón Detener
+        let stopBtn = await page.$('.btn-stop');
+        if (!stopBtn) {
+            const btnHandle = await findElementByText('button', 'Detener');
+            if (btnHandle.asElement()) stopBtn = btnHandle.asElement();
+        }
 
         if (stopBtn) {
             console.log('[Kronos] Stop button found. Clicking...');
             await stopBtn.click();
             await new Promise(r => setTimeout(r, 3000));
 
-            const startBtnCheck = await page.$('.btn-start') ||
-                (await page.$x('//button[contains(., "Iniciar")]'))[0];
+            // Verificar si ahora aparece Iniciar
+            let startBtnCheck = await page.$('.btn-start');
+            if (!startBtnCheck) {
+                const btnHandle = await findElementByText('button', 'Iniciar');
+                if (btnHandle.asElement()) startBtnCheck = btnHandle.asElement();
+            }
 
             if (startBtnCheck) {
                 return { success: true, message: 'Timer stopped successfully.' };
@@ -53,8 +74,12 @@ async function stopTimer(username, password) {
             return { success: true, message: 'Timer stopped (unverified state).' };
         }
 
-        const startBtn = await page.$('.btn-start') ||
-            (await page.$x('//button[contains(., "Iniciar")]'))[0];
+        // Buscar botón Iniciar (para ver si ya estaba detenido)
+        let startBtn = await page.$('.btn-start');
+        if (!startBtn) {
+            const btnHandle = await findElementByText('button', 'Iniciar');
+            if (btnHandle.asElement()) startBtn = btnHandle.asElement();
+        }
 
         if (startBtn) {
             console.log('[Kronos] Timer was already stopped.');
