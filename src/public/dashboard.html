@@ -73,6 +73,16 @@
         <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16 items-center">
                 <div class="flex items-center gap-3">
+                    <!-- Header Actions -->
+                    <div id="sessionTimer"
+                        class="px-3 py-1 bg-slate-100 rounded-full text-xs font-mono text-slate-500 hidden md:block">
+                        --:--
+                    </div>
+                    <button id="saveBtn" onclick="saveChanges()"
+                        class="bg-kronos-600 hover:bg-kronos-700 text-white px-4 py-2 rounded-lg font-medium transition-all shadow-sm flex items-center gap-2">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        Guardar
+                    </button>
                     <div class="bg-kronos-500 text-white p-2 rounded-lg shadow-lg shadow-kronos-500/30">
                         <i class="fa-solid fa-clock text-xl"></i>
                     </div>
@@ -165,6 +175,8 @@
         ];
 
         let currentSchedules = []; // Array plano de slots desde DB
+        let sessionExpiresAt = 0;
+        let timerInterval;
 
         // Obtener parámetros
         const urlParams = new URLSearchParams(window.location.search);
@@ -191,11 +203,48 @@
                 if (data.schedules) {
                     currentSchedules = data.schedules;
                 }
+
+                if (data.expiresAt) {
+                    sessionExpiresAt = data.expiresAt;
+                    startSessionTimer();
+                }
+
                 renderAllDays();
             } catch (error) {
                 console.error(error);
                 alert('No se pudo cargar tu horario.');
             }
+        }
+
+        function startSessionTimer() {
+            const timerEl = document.getElementById('sessionTimer');
+
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                const now = Date.now();
+                const diff = sessionExpiresAt - now;
+
+                if (diff <= 0) {
+                    clearInterval(timerInterval);
+                    timerEl.textContent = "Expirado";
+                    timerEl.className = "px-3 py-1 bg-red-100 rounded-full text-xs font-mono text-red-500 font-bold";
+                    document.getElementById('saveBtn').disabled = true;
+                    document.body.style.opacity = '0.5';
+                    alert('La sesión ha expirado. Por favor genera un nuevo enlace en Slack con /panel');
+                    return;
+                }
+
+                const minutes = Math.floor(diff / 60000);
+                const seconds = Math.floor((diff % 60000) / 1000);
+
+                timerEl.textContent = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+                // Alerta visual si queda poco tiempo
+                if (minutes < 1) {
+                    timerEl.classList.remove('bg-slate-100', 'text-slate-500');
+                    timerEl.classList.add('bg-amber-100', 'text-amber-600');
+                }
+            }, 1000);
         }
 
         async function saveChanges() {

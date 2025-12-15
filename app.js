@@ -5,7 +5,7 @@ const path = require('path');
 const installationStore = require('./src/utils/installationStore');
 const { handleBusCommand, handleRealTimeBusCommand } = require('./src/handlers/busHandler');
 const { handleRefreshSchedule, handleRefreshRealTime } = require('./src/handlers/actionHandler');
-const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, initSchedules, reloadUserSchedule, tokenStore } = require('./src/handlers/kronosHandler');
+const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, initSchedules, reloadUserSchedule, sendScheduleConfirmation, tokenStore } = require('./src/handlers/kronosHandler');
 const axios = require('axios');
 const config = require('./src/config');
 const db = require('./src/db'); // Necesario para la API
@@ -33,7 +33,7 @@ receiver.router.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/public/dashboard.html'));
 });
 
-// API: Obtener horario
+// API: Obtener datos
 receiver.router.get('/api/schedule', async (req, res) => {
   const token = req.query.token;
   const session = tokenStore.get(token);
@@ -44,10 +44,13 @@ receiver.router.get('/api/schedule', async (req, res) => {
 
   try {
     const schedules = await db.getWeeklySchedule(session.slackId);
-    res.json({ success: true, schedules });
+    res.json({
+      schedules,
+      expiresAt: session.expiresAt // Enviamos expiración al front
+    });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: 'Error interno' });
+    res.status(500).json({ error: 'Error obteniendo datos' });
   }
 });
 
@@ -68,6 +71,9 @@ receiver.router.post('/api/schedule', async (req, res) => {
 
     // HOT RELOAD: Recargar tareas en memoria inmediatamente
     await reloadUserSchedule(session.slackId);
+
+    // Notificar al usuario (asíncrono)
+    sendScheduleConfirmation(session.slackId, slots);
 
     res.json({ success: true });
   } catch (e) {

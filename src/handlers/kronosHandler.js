@@ -82,12 +82,12 @@ const handlePanelCommand = async ({ ack, command, client }) => {
     // Generar token único seguro
     const token = crypto.randomBytes(16).toString('hex');
 
-    // Guardar token (validez: 7 días)
-    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+    // Guardar token (validez: 15 minutos)
+    const EXPIRATION_MS = 15 * 60 * 1000;
     tokenStore.set(token, {
         slackId,
         username,
-        expiresAt: Date.now() + SEVEN_DAYS
+        expiresAt: Date.now() + EXPIRATION_MS
     });
 
     // Limpiar tokens expirados (mantenimiento básico)
@@ -101,8 +101,45 @@ const handlePanelCommand = async ({ ack, command, client }) => {
 
     await client.chat.postMessage({
         channel: slackId,
-        text: `🎛️ **Panel de Control Kronos**\n\nAccede aquí para configurar tu horario semanal:\n👉 <${dashboardUrl}|Abrir Dashboard>\n\n_(Este enlace expira en 7 días)_`
+        text: `🎛️ **Panel de Control Kronos**\n\nAccede aquí para configurar tu horario semanal:\n👉 <${dashboardUrl}|Abrir Dashboard>\n\n_(Este enlace expira en 15 minutos)_`
     });
+};
+
+const sendScheduleConfirmation = async (slackId, slots) => {
+    try {
+        const token = await getSlackToken();
+        if (!token) return;
+
+        // Agrupar por días
+        const daysMap = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 0: 'Domingo' };
+        let summary = '';
+
+        // Ordenar slots
+        slots.sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time));
+
+        const groups = {};
+        slots.forEach(s => {
+            if (!groups[s.day_of_week]) groups[s.day_of_week] = [];
+            groups[s.day_of_week].push(`${s.start_time} - ${s.end_time}`);
+        });
+
+        if (Object.keys(groups).length === 0) {
+            summary = '_Sin horarios activos (Días libres)_';
+        } else {
+            for (const [dayCode, times] of Object.entries(groups)) {
+                summary += `• *${daysMap[dayCode]}:* ${times.join(', ')}\n`;
+            }
+        }
+
+        await slackClient.chat.postMessage({
+            token: token,
+            channel: slackId,
+            text: `✅ **Horario Guardado Correctamente**\n\nAsí ha quedado tu configuración semanal:\n\n${summary}\n\n¿Te equivocaste? Genera un nuevo panel con \`/panel\``
+        });
+
+    } catch (e) {
+        console.error('Error enviando confirmación:', e);
+    }
 };
 
 const handleScheduleCommand = async ({ ack, command, client }) => {
@@ -240,6 +277,7 @@ module.exports = {
     handlePanelCommand,
     handleScheduleCommand,
     initSchedules,
-    reloadUserSchedule, // Exportado para usar en API
+    reloadUserSchedule,
+    sendScheduleConfirmation, // Exportado para usar en API
     tokenStore
 };
