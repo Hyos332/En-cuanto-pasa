@@ -60,20 +60,11 @@ receiver.router.post('/api/schedule', async (req, res) => {
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 
-  const { days } = req.body; // Array de días
+  const { slots } = req.body; // Array de time_slots
 
   try {
-    // Guardar cada día
-    for (const day of days) {
-      // day: { id: 1, start: '08:00', end: '15:00', active: true }
-      await db.saveDaySchedule(
-        session.slackId,
-        day.id,
-        day.start,
-        day.end,
-        day.active
-      );
-    }
+    // Guardar todos los slots (vaciando anteriores)
+    await db.saveUserSlots(session.slackId, slots);
 
     // HOT RELOAD: Recargar tareas en memoria inmediatamente
     await reloadUserSchedule(session.slackId);

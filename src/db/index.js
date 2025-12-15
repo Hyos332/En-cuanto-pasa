@@ -24,15 +24,14 @@ db.serialize(() => {
         'active INTEGER DEFAULT 1' +
         ')');
 
-    // NUEVA TABLA: Horario Semanal Completo
-    db.run('CREATE TABLE IF NOT EXISTS weekly_schedules (' +
+    // NUEVA TABLA V2: Franjas Horarias (Jornada Partida)
+    db.run('CREATE TABLE IF NOT EXISTS time_slots (' +
         'id INTEGER PRIMARY KEY AUTOINCREMENT,' +
         'slack_id TEXT,' +
-        'day_of_week INTEGER,' + // 0=Domingo, 1=Lunes, ...
-        'start_time TEXT,' +     // "09:00" o null
-        'end_time TEXT,' +       // "18:00" o null
-        'is_active INTEGER DEFAULT 1,' +
-        'UNIQUE(slack_id, day_of_week)' + // Un solo registro por día y usuario
+        'day_of_week INTEGER,' + // 1=Lunes...
+        'start_time TEXT,' +
+        'end_time TEXT,' +
+        'is_active INTEGER DEFAULT 1' +
         ')');
 });
 
@@ -77,19 +76,49 @@ module.exports = {
                 });
         });
     },
+
+    // --- NUEVO V2 (Multi-Slot) ---
+    // Reemplaza TODOS los slots de un usuario por los nuevos (limpieza total)
+    saveUserSlots: (slackId, slots) => {
+        return new Promise((resolve, reject) => {
+            db.serialize(() => {
+                db.run('BEGIN TRANSACTION');
+
+                // 1. Borrar horarios viejos
+                db.run('DELETE FROM time_slots WHERE slack_id = ?', [slackId]);
+
+                // 2. Insertar nuevos
+                const stmt = db.prepare('INSERT INTO time_slots (slack_id, day_of_week, start_time, end_time, is_active) VALUES (?, ?, ?, ?, ?)');
+
+                slots.forEach(slot => {
+                    stmt.run(slackId, slot.day_of_week, slot.start_time, slot.end_time, slot.is_active ? 1 : 0);
+                });
+
+                stmt.finalize();
+
+                db.run('COMMIT', (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+        });
+    },
+
+    // Lee la tabla nueva time_slots
     getWeeklySchedule: (slackId) => {
         return new Promise((resolve, reject) => {
-            db.all('SELECT * FROM weekly_schedules WHERE slack_id = ? ORDER BY day_of_week',
+            db.all('SELECT * FROM time_slots WHERE slack_id = ? ORDER BY day_of_week, start_time',
                 [slackId], (err, rows) => {
                     if (err) reject(err);
                     else resolve(rows);
                 });
         });
     },
+
     getAllWeeklySchedules: () => {
         return new Promise((resolve, reject) => {
             db.all('SELECT w.*, u.kronos_user, u.kronos_password ' +
-                'FROM weekly_schedules w ' +
+                'FROM time_slots w ' +
                 'JOIN users u ON w.slack_id = u.slack_id ' +
                 'WHERE w.is_active = 1', [], (err, rows) => {
                     if (err) reject(err);
@@ -97,6 +126,7 @@ module.exports = {
                 });
         });
     },
+
     getAllSchedules: () => {
         return new Promise((resolve, reject) => {
             db.all('SELECT s.slack_id, s.time, u.kronos_user, u.kronos_password ' +

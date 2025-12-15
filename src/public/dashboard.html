@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kronos Dashboard | Automatización</title>
+    <title>Krokos Dashboard | Automatización</title>
 
     <!-- Fuentes e Iconoss -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -139,8 +139,8 @@
     <!-- Footer -->
     <footer class="bg-white border-t border-slate-200 mt-12 py-8">
         <div class="max-w-5xl mx-auto px-4 text-center text-slate-400 text-sm">
-            <p>Hecho con ❤️ por el equipo de Desarrollo SDR</p>
-            <p class="mt-1 text-xs">v3.1.0 • Kronos Automation</p>
+            <p>Hecho con ❤️ por el equipo de Fenix</p>
+            <p class="mt-1 text-xs">v3.1.1 • Kronos Automation</p>
         </div>
     </footer>
 
@@ -164,8 +164,7 @@
             { id: 5, name: 'Viernes', icon: 'fa-glass-cheers text-amber-500' }
         ];
 
-        // Estado local
-        let currentSchedule = [];
+        let currentSchedules = []; // Array plano de slots desde DB
 
         // Obtener parámetros
         const urlParams = new URLSearchParams(window.location.search);
@@ -190,12 +189,12 @@
                 const data = await res.json();
 
                 if (data.schedules) {
-                    currentSchedule = data.schedules;
+                    currentSchedules = data.schedules;
                 }
-                renderDays();
+                renderAllDays();
             } catch (error) {
                 console.error(error);
-                alert('No se pudo cargar tu horario. Verifica que el enlace no haya expirado.');
+                alert('No se pudo cargar tu horario.');
             }
         }
 
@@ -209,18 +208,36 @@
             btn.classList.add('opacity-75');
 
             // Collect Data
-            const payload = days.map(day => {
-                const isActive = document.querySelector(`input[name="active_${day.id}"]`).checked;
-                const start = document.querySelector(`input[name="start_${day.id}"]`).value;
-                const end = document.querySelector(`input[name="end_${day.id}"]`).value;
-                return { id: day.id, active: isActive, start, end };
+            const slots = [];
+
+            days.forEach(day => {
+                const dayContainer = document.getElementById(`day-slots-${day.id}`);
+                const rows = dayContainer.querySelectorAll('.slot-row');
+                const dayActive = document.querySelector(`input[name="active_day_${day.id}"]`).checked;
+
+                if (dayActive) {
+                    rows.forEach(row => {
+                        const start = row.querySelector('.start-time').value;
+                        const end = row.querySelector('.end-time').value;
+
+                        // Solo guardar si tiene datos (aunque sea uno)
+                        if (start || end) {
+                            slots.push({
+                                day_of_week: day.id,
+                                start_time: start || null, // null si está vacío (node-schedule lo ignorará)
+                                end_time: end || null,
+                                is_active: true
+                            });
+                        }
+                    });
+                }
             });
 
             try {
                 const res = await fetch(`/api/schedule?token=${token}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ days: payload })
+                    body: JSON.stringify({ slots: slots })
                 });
 
                 if (res.ok) {
@@ -232,7 +249,6 @@
                 console.error(error);
                 alert('Error de conexión');
             } finally {
-                // Reset Button
                 btn.disabled = false;
                 icon.className = 'fa-solid fa-floppy-disk';
                 btn.classList.remove('opacity-75');
@@ -241,80 +257,123 @@
 
         // --- RENDER ---
 
-        function renderDays() {
+        function renderAllDays() {
             const container = document.getElementById('daysContainer');
             container.innerHTML = '';
 
             days.forEach(day => {
-                // Buscar si existe configuración guardada para este día
-                const saved = currentSchedule.find(s => s.day_of_week === day.id);
+                // Filtrar slots para este día
+                const mySlots = currentSchedules.filter(s => s.day_of_week === day.id);
+                // Si no hay slots guardados, asumimos día activo pero sin horas definidas inicialmente
+                // OJO: Si no hay slots en DB, es posible que sea porque el usuario lo desactivó o es nuevo.
+                // Asumimos activo por defecto si es nuevo.
+                const isActive = mySlots.length > 0 ? true : (currentSchedules.length === 0);
 
-                // Defaults
-                const isActive = saved ? (saved.is_active === 1) : true;
-                const startTime = saved ? saved.start_time : '08:00';
-                const endTime = saved ? saved.end_time : '15:00';
+                // Estructura Base del Día
+                const dayCard = document.createElement('div');
+                dayCard.className = `group transition-all bg-white border-b border-slate-100 last:border-0 ${isActive ? '' : 'opacity-60 grayscale'}`;
+                dayCard.id = `day-card-${day.id}`;
 
-                const row = document.createElement('div');
-                row.className = `group hover:bg-slate-50 transition-colors p-4 md:grid md:grid-cols-12 md:gap-4 md:items-center flex flex-col gap-4 border-l-4 ${isActive ? 'border-transparent hover:border-kronos-500' : 'border-slate-200 bg-slate-50 opacity-75'}`;
-
-                row.innerHTML = `
-                    <!-- Día -->
-                    <div class="md:col-span-3 flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-white group-hover:text-kronos-500 transition-colors shadow-sm">
-                            <i class="fa-solid ${day.icon}"></i>
+                dayCard.innerHTML = `
+                    <div class="p-6 md:grid md:grid-cols-12 md:gap-4 md:items-start flex flex-col gap-4">
+                        <!-- Header Día & Toggle Master -->
+                        <div class="md:col-span-3 flex items-center justify-between md:justify-start gap-4 pt-2">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 group-hover:bg-kronos-50 group-hover:text-kronos-600 transition-colors">
+                                    <i class="fa-solid ${day.icon}"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-700">${day.name}</h3>
+                                    <p class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold status-text">${isActive ? 'Activo' : 'Inactivo'}</p>
+                                </div>
+                            </div>
+                            
+                            <label class="relative inline-flex items-center cursor-pointer md:hidden">
+                                <input type="checkbox" name="active_day_${day.id}" class="sr-only peer" ${isActive ? 'checked' : ''} onchange="toggleDayMaster(${day.id}, this)">
+                                <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-kronos-500"></div>
+                            </label>
                         </div>
-                        <span class="font-semibold text-slate-700">${day.name}</span>
-                    </div>
 
-                    <!-- Toggle Activo -->
-                    <div class="md:col-span-1 flex justify-center py-2 md:py-0">
-                        <label class="relative inline-flex items-center cursor-pointer" title="${isActive ? 'Día Laborable' : 'Día Libre'}">
-                            <input type="checkbox" name="active_${day.id}" class="sr-only peer" ${isActive ? 'checked' : ''} onchange="toggleDay(this)">
-                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-kronos-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-kronos-500"></div>
-                        </label>
-                    </div>
-
-                    <!-- Hora Entrada -->
-                    <div class="md:col-span-3">
-                        <div class="relative">
-                            <i class="fa-regular fa-sun text-slate-400 absolute inset-y-0 left-3 flex items-center pointer-events-none"></i>
-                            <input type="time" name="start_${day.id}" value="${startTime}" ${!isActive ? 'disabled' : ''} class="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-kronos-500 focus:border-kronos-500 text-sm shadow-sm transition-all disabled:bg-slate-100 disabled:text-slate-400">
+                        <!-- Toggle Desktop -->
+                        <div class="md:col-span-1 hidden md:flex justify-center pt-3">
+                            <label class="relative inline-flex items-center cursor-pointer" title="Activar/Desactivar Día">
+                                <input type="checkbox" name="active_day_${day.id}" class="sr-only peer" ${isActive ? 'checked' : ''} onchange="toggleDayMaster(${day.id}, this)">
+                                <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-kronos-500"></div>
+                            </label>
                         </div>
-                        <label class="md:hidden text-xs text-slate-400 mt-1 ml-1">Entrada</label>
-                    </div>
 
-                    <!-- Hora Salida -->
-                    <div class="md:col-span-3">
-                        <div class="relative">
-                            <i class="fa-regular fa-moon text-slate-400 absolute inset-y-0 left-3 flex items-center pointer-events-none"></i>
-                            <input type="time" name="end_${day.id}" value="${endTime}" ${!isActive ? 'disabled' : ''} class="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-kronos-500 focus:border-kronos-500 text-sm shadow-sm transition-all disabled:bg-slate-100 disabled:text-slate-400">
-                        </div>
-                        <label class="md:hidden text-xs text-slate-400 mt-1 ml-1">Salida</label>
-                    </div>
-
-                    <!-- Acciones (Placeholder por ahora) -->
-                    <div class="md:col-span-2 text-center md:flex md:justify-center">
+                        <!-- Slots Container -->
+                        <div class="md:col-span-8 space-y-3" id="day-slots-${day.id}"></div>
                     </div>
                 `;
-                container.appendChild(row);
+
+                container.appendChild(dayCard);
+
+                // Renderizar Slots Internos
+                const slotsContainer = document.getElementById(`day-slots-${day.id}`);
+
+                if (mySlots.length > 0) {
+                    mySlots.forEach((slot, index) => {
+                        addSlotRow(slotsContainer, day.id, slot.start_time, slot.end_time, index === 0);
+                    });
+                } else {
+                    // Default empty slot
+                    addSlotRow(slotsContainer, day.id, '08:00', '15:00', true);
+                }
             });
         }
 
-        // Efecto visual al desactivar un día
-        window.toggleDay = function (checkbox) {
-            // Recargamos el estilo de la fila sin recargar datos para feedback inmediato
-            // Simplemente cambiamos la opacidad y habilitamos inputs
-            const row = checkbox.closest('.group');
-            const inputs = row.querySelectorAll('input[type="time"]');
+        function addSlotRow(container, dayId, start = '', end = '', isFirst = false) {
+            const row = document.createElement('div');
+            row.className = 'slot-row flex items-center gap-3 animate-fade-in';
+
+            row.innerHTML = `
+                <div class="grid grid-cols-2 gap-3 flex-grow">
+                    <div class="relative">
+                        <i class="fa-regular fa-sun text-slate-400 absolute inset-y-0 left-3 flex items-center pointer-events-none text-xs"></i>
+                        <input type="time" value="${start}" class="start-time block w-full pl-9 pr-2 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-kronos-500 focus:border-kronos-500 text-sm shadow-sm hover:border-slate-300 bg-white">
+                    </div>
+                    <div class="relative">
+                        <i class="fa-regular fa-moon text-slate-400 absolute inset-y-0 left-3 flex items-center pointer-events-none text-xs"></i>
+                        <input type="time" value="${end}" class="end-time block w-full pl-9 pr-2 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-kronos-500 focus:border-kronos-500 text-sm shadow-sm hover:border-slate-300 bg-white">
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1 w-16 justify-end">
+                    ${isFirst
+                    ? `<button type="button" onclick="addSlot(${dayId})" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-kronos-600 hover:bg-kronos-50 transition-colors" title="Añadir Franja"><i class="fa-solid fa-plus"></i></button>`
+                    : `<button type="button" onclick="removeSlot(this)" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors" title="Eliminar Franja"><i class="fa-solid fa-xmark"></i></button>`
+                }
+                </div>
+            `;
+            container.appendChild(row);
+        }
+
+        // --- ACTIONS ---
+
+        window.addSlot = function (dayId) {
+            const container = document.getElementById(`day-slots-${dayId}`);
+            addSlotRow(container, dayId, '', '', false);
+        };
+
+        window.removeSlot = function (btn) {
+            const row = btn.closest('.slot-row');
+            row.remove();
+        };
+
+        window.toggleDayMaster = function (dayId, checkbox) {
+            const card = document.getElementById(`day-card-${dayId}`);
+            const statusText = card.querySelector('.status-text');
+            const inputs = card.querySelectorAll('input[type="time"], button');
 
             if (checkbox.checked) {
-                row.classList.remove('bg-slate-50', 'opacity-75', 'border-slate-200');
-                row.classList.add('border-transparent');
-                inputs.forEach(i => { i.disabled = false; i.classList.remove('bg-slate-100'); });
+                card.classList.remove('opacity-60', 'grayscale');
+                statusText.textContent = 'Activo';
+                inputs.forEach(el => el.disabled = false);
             } else {
-                row.classList.add('bg-slate-50', 'opacity-75', 'border-slate-200');
-                row.classList.remove('border-transparent');
-                inputs.forEach(i => { i.disabled = true; i.classList.add('bg-slate-100'); });
+                card.classList.add('opacity-60', 'grayscale');
+                statusText.textContent = 'Inactivo';
+                inputs.forEach(el => el.disabled = true);
             }
         };
 
