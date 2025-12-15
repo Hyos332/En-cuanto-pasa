@@ -76,7 +76,7 @@ receiver.router.post('/api/schedule', async (req, res) => {
     }
 
     // HOT RELOAD: Recargar tareas en memoria inmediatamente
-    await reloadUserSchedule(session.slackId, app.client);
+    await reloadUserSchedule(session.slackId);
 
     res.json({ success: true });
   } catch (e) {
