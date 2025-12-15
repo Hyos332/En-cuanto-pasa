@@ -261,13 +261,23 @@
             const container = document.getElementById('daysContainer');
             container.innerHTML = '';
 
+            // Verificamos si el usuario tiene ALGÚN dato guardado en total
+            const hasAnyData = currentSchedules.length > 0;
+
             days.forEach(day => {
                 // Filtrar slots para este día
                 const mySlots = currentSchedules.filter(s => s.day_of_week === day.id);
-                // Si no hay slots guardados, asumimos día activo pero sin horas definidas inicialmente
-                // OJO: Si no hay slots en DB, es posible que sea porque el usuario lo desactivó o es nuevo.
-                // Asumimos activo por defecto si es nuevo.
-                const isActive = mySlots.length > 0 ? true : (currentSchedules.length === 0);
+
+                // LÓGICA CORREGIDA:
+                // Si el usuario tiene datos guardados (hasAnyData = true),
+                // entonces este día es activo SOLO SI tiene sus propios slots.
+                // Si el usuario es nuevo (hasAnyData = false), activamos todo por defecto.
+                let isActive;
+                if (hasAnyData) {
+                    isActive = mySlots.length > 0;
+                } else {
+                    isActive = true; // Default para nuevos usuarios
+                }
 
                 // Estructura Base del Día
                 const dayCard = document.createElement('div');
