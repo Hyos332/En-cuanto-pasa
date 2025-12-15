@@ -114,13 +114,23 @@ const sendScheduleConfirmation = async (slackId, slots) => {
         const daysMap = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 0: 'Domingo' };
         let summary = '';
 
-        // Ordenar slots
-        slots.sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time));
+        // Ordenar slots (Manejo robusto de nulos)
+        slots.sort((a, b) => {
+            const dayDiff = a.day_of_week - b.day_of_week;
+            if (dayDiff !== 0) return dayDiff;
+
+            const timeA = a.start_time || '';
+            const timeB = b.start_time || '';
+            return timeA.localeCompare(timeB);
+        });
 
         const groups = {};
         slots.forEach(s => {
             if (!groups[s.day_of_week]) groups[s.day_of_week] = [];
-            groups[s.day_of_week].push(`${s.start_time} - ${s.end_time}`);
+            // Si falta alguna hora, mostrar ??:??
+            const start = s.start_time || '??:??';
+            const end = s.end_time || '??:??';
+            groups[s.day_of_week].push(`${start} - ${end}`);
         });
 
         if (Object.keys(groups).length === 0) {
@@ -168,6 +178,12 @@ const handleScheduleCommand = async ({ ack, command, client }) => {
 
 // Función genérica para programar un trabajo con node-schedule
 function scheduleJob(slackId, time, type, dayOfWeek = null) {
+    // Validar tiempo
+    if (!time || typeof time !== 'string' || !time.includes(':')) {
+        console.warn(`⚠️ Invalid time format for ${slackId}: ${time}`);
+        return;
+    }
+
     // ID único para el trabajo: slackId + tipo + dia + HORA (para evitar sobrescribir turnos múltiples)
     const jobKey = `${slackId}_${type}${dayOfWeek !== null ? '_' + dayOfWeek : ''}_${time}`;
 

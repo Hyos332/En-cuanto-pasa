@@ -250,11 +250,13 @@
                     rows.forEach(row => {
                         const start = row.querySelector('.start-time').value;
                         const end = row.querySelector('.end-time').value;
-                        if (start || end) {
+
+                        // Solo guardar si el slot está COMPLETO (entrada Y salida)
+                        if (start && end) {
                             slots.push({
                                 day_of_week: day.id,
-                                start_time: start || null,
-                                end_time: end || null,
+                                start_time: start,
+                                end_time: end,
                                 is_active: true
                             });
                         }
