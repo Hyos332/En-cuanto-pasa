@@ -6,3 +6,5 @@ services:
     container_name: tus-slack-bot
     ports:
       - '${PORT:-3000}:${PORT:-3000}'
+    volumes:
+      - ./data:/app/data
