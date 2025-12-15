@@ -1,13 +1,17 @@
 require('dotenv').config();
-const { App } = require('@slack/bolt');
+const { App, ExpressReceiver } = require('@slack/bolt');
+const express = require('express'); // Necesario para static files
+const path = require('path');
 const installationStore = require('./src/utils/installationStore');
 const { handleBusCommand, handleRealTimeBusCommand } = require('./src/handlers/busHandler');
 const { handleRefreshSchedule, handleRefreshRealTime } = require('./src/handlers/actionHandler');
-const { handleLoginCommand, handleLoginSubmission, handleScheduleCommand, initSchedules } = require('./src/handlers/kronosHandler');
+const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, initSchedules, tokenStore } = require('./src/handlers/kronosHandler');
 const axios = require('axios');
 const config = require('./src/config');
+const db = require('./src/db'); // Necesario para la API
 
-const app = new App({
+// 1. Inicializar ExpressReceiver (Servidor Web)
+const receiver = new ExpressReceiver({
   signingSecret: process.env.SLACK_SIGNING_SECRET,
   clientId: process.env.SLACK_CLIENT_ID,
   clientSecret: process.env.SLACK_CLIENT_SECRET,
@@ -18,25 +22,81 @@ const app = new App({
     installPath: '/slack/install',
     redirectUriPath: '/slack/oauth_redirect',
   },
-  port: process.env.PORT || 3000
+});
+
+// 2. Configurar rutas Web (Dashboard)
+receiver.router.use('/static', express.static(path.join(__dirname, 'src/public')));
+receiver.router.use(express.json()); // Permitir JSON en body
+
+// Ruta principal del Dashboard
+receiver.router.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'src/public/dashboard.html'));
+});
+
+// API: Obtener horario
+receiver.router.get('/api/schedule', async (req, res) => {
+  const token = req.query.token;
+  const session = tokenStore.get(token);
+
+  if (!session || Date.now() > session.expiresAt) {
+    return res.status(401).json({ error: 'Token inválido o expirado' });
+  }
+
+  try {
+    const schedules = await db.getWeeklySchedule(session.slackId);
+    res.json({ success: true, schedules });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// API: Guardar horario
+receiver.router.post('/api/schedule', async (req, res) => {
+  const token = req.query.token;
+  const session = tokenStore.get(token);
+
+  if (!session || Date.now() > session.expiresAt) {
+    return res.status(401).json({ error: 'Token inválido o expirado' });
+  }
+
+  const { days } = req.body; // Array de días
+
+  try {
+    // Guardar cada día
+    for (const day of days) {
+      // day: { id: 1, start: '08:00', end: '15:00', active: true }
+      await db.saveDaySchedule(
+        session.slackId,
+        day.id,
+        day.start,
+        day.end,
+        day.active
+      );
+    }
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Error guardando datos' });
+  }
+});
+
+// 3. Inicializar App de Bolt con ese receiver
+const app = new App({
+  receiver,
 });
 
 // Middleware de Debug Global
 app.use(async ({ logger, body, next }) => {
-  console.log('📡 [DEBUG] Petición entrante de Slack:');
-  if (body.type) console.log('   Tipo:', body.type);
-  if (body.command) console.log('   Comando:', body.command);
-  if (body.view) console.log('   View Callback ID:', body.view.callback_id);
-  if (body.actions) console.log('   Action ID:', body.actions[0].action_id);
+  // ... (debug logs)
   await next();
 });
 
 // --- COMANDOS ---
 app.command('/bus', handleBusCommand);
 app.command('/realTimeBus', handleRealTimeBusCommand);
-
 app.command('/login', handleLoginCommand);
-app.view('kronos_login_modal', handleLoginSubmission);
+app.command('/panel', handlePanelCommand); // <--- NUEVO COMANDO
 app.command('/programar', handleScheduleCommand);
 
 // --- ACCIONES (BOTONES) ---

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kronos Dashboard | Automatización</title>
+
+    <!-- Fuentes e Iconos -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Configuración Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        kronos: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Estilos Custom para inputs de hora */
+        input[type="time"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            filter: invert(0.5);
+        }
+
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #0ea5e9;
+        }
+
+        .toggle-checkbox:checked+.toggle-label {
+            background-color: #0ea5e9;
+        }
+
+        /* Animaciones */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50 backdrop-blur-md bg-opacity-90">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-3">
+                    <div class="bg-kronos-500 text-white p-2 rounded-lg shadow-lg shadow-kronos-500/30">
+                        <i class="fa-solid fa-clock text-xl"></i>
+                    </div>
+                    <span class="font-bold text-xl tracking-tight text-slate-800">Kronos<span
+                            class="text-kronos-500">Auto</span></span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-sm text-slate-500 hidden sm:block">Logueado como</div>
+                    <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full">
+                        <div class="w-8 h-8 bg-gradient-to-br from-kronos-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                            id="userAvatar">U</div>
+                        <span class="font-medium text-sm text-slate-700 pr-1" id="userName">Usuario</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+
+        <div class="text-center mb-10 animate-fade-in">
+            <h1 class="text-3xl font-bold text-slate-900 mb-2">Configura tu Semana</h1>
+            <p class="text-slate-500 max-w-xl mx-auto">Define tus horarios de entrada y salida para que el bot gestione
+                Kronos automáticamente. Desactiva los días que no trabajes.</p>
+        </div>
+
+        <!-- Tarjeta Principal -->
+        <div class="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 overflow-hidden animate-fade-in"
+            style="animation-delay: 0.1s;">
+
+            <!-- Encabezados Tabla (Desktop) -->
+            <div
+                class="hidden md:grid grid-cols-12 gap-4 bg-slate-50 p-4 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <div class="col-span-3 flex items-center gap-2">Día</div>
+                <div class="col-span-1 text-center">Estado</div>
+                <div class="col-span-3">Hora Entrada</div>
+                <div class="col-span-3">Hora Salida</div>
+                <div class="col-span-2 text-center">Acciones</div>
+            </div>
+
+            <form id="scheduleForm">
+                <div id="daysContainer" class="divide-y divide-slate-100">
+                    <!-- Los días se inyectarán aquí con JS -->
+                    <div class="p-8 text-center text-slate-400">
+                        <i class="fa-solid fa-circle-notch fa-spin text-3xl text-kronos-500 mb-2"></i>
+                        <p>Cargando horarios...</p>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Botón Flotante Guardar -->
+        <div class="fixed bottom-8 right-8 z-40 animate-fade-in" style="animation-delay: 0.3s;">
+            <button onclick="saveChanges()" id="saveBtn"
+                class="group bg-slate-900 hover:bg-black text-white px-6 py-4 rounded-full shadow-2xl shadow-slate-900/40 transition-all duration-300 transform hover:-translate-y-1 flex items-center gap-3 font-medium">
+                <i class="fa-solid fa-floppy-disk group-hover:animate-bounce"></i>
+                Guardar Cambios
+            </button>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 mt-12 py-8">
+        <div class="max-w-5xl mx-auto px-4 text-center text-slate-400 text-sm">
+            <p>Hecho con ❤️ por el equipo de Desarrollo SDR</p>
+            <p class="mt-1 text-xs">v3.1.0 • Kronos Automation</p>
+        </div>
+    </footer>
+
+    <!-- Toast Notification -->
+    <div id="toast"
+        class="fixed top-24 right-4 bg-white border-l-4 border-green-500 shadow-xl rounded-lg p-4 transform translate-x-full transition-transform duration-300 z-50 max-w-sm flex items-start gap-3">
+        <div class="text-green-500 mt-0.5"><i class="fa-solid fa-circle-check"></i></div>
+        <div>
+            <h4 class="font-bold text-slate-800 text-sm">Guardado Correctamente</h4>
+            <p class="text-slate-600 text-sm mt-0.5">Tus horarios se han actualizado.</p>
+        </div>
+    </div>
+
+    <!-- Scripts Logic -->
+    <script>
+        const days = [
+            { id: 1, name: 'Lunes', icon: 'fa-calendar-week' },
+            { id: 2, name: 'Martes', icon: 'fa-calendar-day' },
+            { id: 3, name: 'Miércoles', icon: 'fa-calendar-day' },
+            { id: 4, name: 'Jueves', icon: 'fa-calendar-day' },
+            { id: 5, name: 'Viernes', icon: 'fa-glass-cheers text-amber-500' }
+        ];
+
+        // Estado local
+        let currentSchedule = [];
+
+        // Obtener parámetros
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        const user = urlParams.get('user') || 'Usuario';
+
+        // UI Inicial
+        document.getElementById('userName').textContent = user;
+        document.getElementById('userAvatar').textContent = user.charAt(0).toUpperCase();
+
+        if (!token) {
+            alert('Token de acceso inválido. Vuelve a generar el enlace desde Slack.');
+            document.body.innerHTML = '<div class="flex items-center justify-center h-screen text-slate-500">Acceso Denegado</div>';
+        }
+
+        // --- API CALLS ---
+
+        async function loadData() {
+            try {
+                const res = await fetch(`/api/schedule?token=${token}`);
+                if (!res.ok) throw new Error('Error cargando datos');
+                const data = await res.json();
+
+                if (data.schedules) {
+                    currentSchedule = data.schedules;
+                }
+                renderDays();
+            } catch (error) {
+                console.error(error);
+                alert('No se pudo cargar tu horario. Verifica que el enlace no haya expirado.');
+            }
+        }
+
+        async function saveChanges() {
+            const btn = document.getElementById('saveBtn');
+            const icon = btn.querySelector('i');
+
+            // Loading
+            btn.disabled = true;
+            icon.className = 'fa-solid fa-circle-notch fa-spin';
+            btn.classList.add('opacity-75');
+
+            // Collect Data
+            const payload = days.map(day => {
+                const isActive = document.querySelector(`input[name="active_${day.id}"]`).checked;
+                const start = document.querySelector(`input[name="start_${day.id}"]`).value;
+                const end = document.querySelector(`input[name="end_${day.id}"]`).value;
+                return { id: day.id, active: isActive, start, end };
+            });
+
+            try {
+                const res = await fetch(`/api/schedule?token=${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days: payload })
+                });
+
+                if (res.ok) {
+                    showToast();
+                } else {
+                    alert('Error guardando cambios');
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Error de conexión');
+            } finally {
+                // Reset Button
+                btn.disabled = false;
+                icon.className = 'fa-solid fa-floppy-disk';
+                btn.classList.remove('opacity-75');
+            }
+        }
+
+        // --- RENDER ---
+
+        function renderDays() {
+            const container = document.getElementById('daysContainer');
+            container.innerHTML = '';
+
+            days.forEach(day => {
+                // Buscar si existe configuración guardada para este día
+                const saved = currentSchedule.find(s => s.day_of_week === day.id);
+
+                // Defaults
+                const isActive = saved ? (saved.is_active === 1) : true;
+                const startTime = saved ? saved.start_time : '08:00';
+                const endTime = saved ? saved.end_time : '15:00';
+
+                const row = document.createElement('div');
+                row.className = `group hover:bg-slate-50 transition-colors p-4 md:grid md:grid-cols-12 md:gap-4 md:items-center flex flex-col gap-4 border-l-4 ${isActive ? 'border-transparent hover:border-kronos-500' : 'border-slate-200 bg-slate-50 opacity-75'}`;
+
+                row.innerHTML = `
+                    <!-- Día -->
+                    <div class="md:col-span-3 flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-white group-hover:text-kronos-500 transition-colors shadow-sm">
+                            <i class="fa-solid ${day.icon}"></i>
+                        </div>
+                        <span class="font-semibold text-slate-700">${day.name}</span>
+                    </div>
+
+                    <!-- Toggle Activo -->
+                    <div class="md:col-span-1 flex justify-center py-2 md:py-0">
+                        <label class="relative inline-flex items-center cursor-pointer" title="${isActive ? 'Día Laborable' : 'Día Libre'}">
+                            <input type="checkbox" name="active_${day.id}" class="sr-only peer" ${isActive ? 'checked' : ''} onchange="toggleDay(this)">
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-kronos-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-kronos-500"></div>
+                        </label>
+                    </div>
+
+                    <!-- Hora Entrada -->
+                    <div class="md:col-span-3">
+                        <div class="relative">
+                            <i class="fa-regular fa-sun text-slate-400 absolute inset-y-0 left-3 flex items-center pointer-events-none"></i>
+                            <input type="time" name="start_${day.id}" value="${startTime}" ${!isActive ? 'disabled' : ''} class="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-kronos-500 focus:border-kronos-500 text-sm shadow-sm transition-all disabled:bg-slate-100 disabled:text-slate-400">
+                        </div>
+                        <label class="md:hidden text-xs text-slate-400 mt-1 ml-1">Entrada</label>
+                    </div>
+
+                    <!-- Hora Salida -->
+                    <div class="md:col-span-3">
+                        <div class="relative">
+                            <i class="fa-regular fa-moon text-slate-400 absolute inset-y-0 left-3 flex items-center pointer-events-none"></i>
+                            <input type="time" name="end_${day.id}" value="${endTime}" ${!isActive ? 'disabled' : ''} class="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-kronos-500 focus:border-kronos-500 text-sm shadow-sm transition-all disabled:bg-slate-100 disabled:text-slate-400">
+                        </div>
+                        <label class="md:hidden text-xs text-slate-400 mt-1 ml-1">Salida</label>
+                    </div>
+
+                    <!-- Acciones (Placeholder por ahora) -->
+                    <div class="md:col-span-2 text-center md:flex md:justify-center">
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        // Efecto visual al desactivar un día
+        window.toggleDay = function (checkbox) {
+            // Recargamos el estilo de la fila sin recargar datos para feedback inmediato
+            // Simplemente cambiamos la opacidad y habilitamos inputs
+            const row = checkbox.closest('.group');
+            const inputs = row.querySelectorAll('input[type="time"]');
+
+            if (checkbox.checked) {
+                row.classList.remove('bg-slate-50', 'opacity-75', 'border-slate-200');
+                row.classList.add('border-transparent');
+                inputs.forEach(i => { i.disabled = false; i.classList.remove('bg-slate-100'); });
+            } else {
+                row.classList.add('bg-slate-50', 'opacity-75', 'border-slate-200');
+                row.classList.remove('border-transparent');
+                inputs.forEach(i => { i.disabled = true; i.classList.add('bg-slate-100'); });
+            }
+        };
+
+        function showToast() {
+            const toast = document.getElementById('toast');
+            toast.classList.remove('translate-x-full');
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+            }, 3000);
+        }
+
+        // Init
+        loadData();
+    </script>
+</body>
+
+</html>

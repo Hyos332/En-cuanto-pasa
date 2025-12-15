@@ -23,6 +23,17 @@ db.serialize(() => {
         'time TEXT,' +
         'active INTEGER DEFAULT 1' +
         ')');
+
+    // NUEVA TABLA: Horario Semanal Completo
+    db.run('CREATE TABLE IF NOT EXISTS weekly_schedules (' +
+        'id INTEGER PRIMARY KEY AUTOINCREMENT,' +
+        'slack_id TEXT,' +
+        'day_of_week INTEGER,' + // 0=Domingo, 1=Lunes, ...
+        'start_time TEXT,' +     // "09:00" o null
+        'end_time TEXT,' +       // "18:00" o null
+        'is_active INTEGER DEFAULT 1,' +
+        'UNIQUE(slack_id, day_of_week)' + // Un solo registro por día y usuario
+        ')');
 });
 
 module.exports = {
@@ -43,6 +54,7 @@ module.exports = {
             });
         });
     },
+    // --- LEGACY --- (Mantener mientras migramos)
     saveSchedule: (slackId, time) => {
         return new Promise((resolve, reject) => {
             db.run('INSERT OR REPLACE INTO schedules (slack_id, time, active) VALUES (?, ?, 1)',
@@ -52,12 +64,26 @@ module.exports = {
                 });
         });
     },
-    getSchedule: (slackId) => {
+    // --- NUEVO --- (Gestión de Horario Semanal)
+    saveDaySchedule: (slackId, day, start, end, active) => {
         return new Promise((resolve, reject) => {
-            db.get('SELECT * FROM schedules WHERE slack_id = ?', [slackId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
+            // day: 1-5 (Lunes-Viernes)
+            db.run(`INSERT OR REPLACE INTO weekly_schedules 
+                (slack_id, day_of_week, start_time, end_time, is_active) 
+                VALUES (?, ?, ?, ?, ?)`,
+                [slackId, day, start, end, active ? 1 : 0], (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+        });
+    },
+    getWeeklySchedule: (slackId) => {
+        return new Promise((resolve, reject) => {
+            db.all('SELECT * FROM weekly_schedules WHERE slack_id = ? ORDER BY day_of_week',
+                [slackId], (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows);
+                });
         });
     },
     getAllSchedules: () => {

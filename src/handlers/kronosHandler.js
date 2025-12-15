@@ -1,8 +1,13 @@
 const db = require('../db');
 const kronosService = require('../services/kronosService');
 const schedule = require('node-schedule');
+const crypto = require('crypto');
 
 const jobs = {};
+
+// Almacén temporal de tokens de acceso al panel
+// Map<token, { slackId: string, username: string, expiresAt: number }>
+const tokenStore = new Map();
 
 const handleLoginCommand = async ({ ack, command, client }) => {
     // IMPORTANTE: Responder inmediatamente para evitar timeout
@@ -31,7 +36,7 @@ const handleLoginCommand = async ({ ack, command, client }) => {
 
         await client.chat.postMessage({
             channel: slackId,
-            text: `✅ **¡Login Exitoso!**\n\nUsuario guardado: \`${username}\`\nAhora puedes usar \`/programar HH:MM\` para automatizar tu salida.`
+            text: `✅ **¡Login Exitoso!**\n\nUsuario guardado: \`${username}\`\nAhora puedes usar \`/panel\` para configurar tu horario semanal de forma visual.`
         });
         console.log('💾 [KRONOS] Guardado exitoso');
 
@@ -44,29 +49,34 @@ const handleLoginCommand = async ({ ack, command, client }) => {
     }
 };
 
-const handleLoginSubmission = async ({ ack, view, body, client }) => {
-    console.log('📝 [KRONOS] Recibido envío de formulario (Submission)');
-    // IMPORTANTE: Debemos responder a Slack en < 3 segundos
+const handlePanelCommand = async ({ ack, command, client }) => {
     await ack();
-    console.log('✅ [KRONOS] Ack enviado a Slack');
+    const slackId = command.user_id;
+    const username = command.user_name;
 
-    try {
-        const username = view.state.values.user_block.username.value;
-        const password = view.state.values.pass_block.password.value;
-        const slackId = body.user.id;
+    // Generar token único seguro
+    const token = crypto.randomBytes(16).toString('hex');
 
-        console.log(`💾 [KRONOS] Intentando guardar usuario ${username} para Slack ID ${slackId}`);
-        await db.saveUser(slackId, username, password);
-        console.log('💾 [KRONOS] Guardado en DB exitoso');
+    // Guardar token (validez: 15 minutos)
+    tokenStore.set(token, {
+        slackId,
+        username,
+        expiresAt: Date.now() + 15 * 60 * 1000
+    });
 
-        await client.chat.postMessage({
-            channel: slackId,
-            text: '✅ Credenciales de Kronos guardadas correctamente.'
-        });
-        console.log('📨 [KRONOS] Mensaje de confirmación enviado');
-    } catch (error) {
-        console.error('❌ [KRONOS] Error crítico en submission:', error);
+    // Limpiar tokens expirados (mantenimiento básico)
+    for (const [t, data] of tokenStore.entries()) {
+        if (Date.now() > data.expiresAt) tokenStore.delete(t);
     }
+
+    // Construir URL
+    const baseUrl = 'https://en-cuanto-pasa.ctdesarrollo-sdr.org';
+    const dashboardUrl = `${baseUrl}/dashboard?token=${token}&user=${encodeURIComponent(username)}`;
+
+    await client.chat.postMessage({
+        channel: slackId,
+        text: `🎛️ **Panel de Control Kronos**\n\nAccede aquí para configurar tu horario semanal:\n👉 <${dashboardUrl}|Abrir Dashboard>\n\n_(Este enlace expira en 15 minutos)_`
+    });
 };
 
 const handleScheduleCommand = async ({ ack, command, client }) => {
@@ -144,7 +154,8 @@ const initSchedules = async (app) => {
 
 module.exports = {
     handleLoginCommand,
-    handleLoginSubmission,
+    handlePanelCommand,
     handleScheduleCommand,
-    initSchedules
+    initSchedules,
+    tokenStore
 };
