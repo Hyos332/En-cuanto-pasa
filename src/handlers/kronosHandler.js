@@ -3,11 +3,32 @@ const kronosService = require('../services/kronosService');
 const schedule = require('node-schedule');
 const crypto = require('crypto');
 const { WebClient } = require('@slack/web-api');
+const fs = require('fs').promises;
+const path = require('path');
 
-// Cliente dedicado para tareas en segundo plano
-const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
+// Cliente sin token inicial (se lo pasaremos en cada llamada)
+const slackClient = new WebClient();
 
 const jobs = {};
+
+// Helper para obtener el token de la instalación
+async function getSlackToken() {
+    try {
+        const dataDir = path.join(__dirname, '../../data');
+        const files = await fs.readdir(dataDir);
+        // Buscamos el primer archivo JSON que parezca un Team ID (empieza por T) o Enterprise (E)
+        const installFile = files.find(f => (f.startsWith('T') || f.startsWith('E')) && f.endsWith('.json'));
+
+        if (!installFile) return null;
+
+        const content = await fs.readFile(path.join(dataDir, installFile), 'utf8');
+        const data = JSON.parse(content);
+        return data.bot?.token;
+    } catch (e) {
+        console.error('Error leyendo token de Slack:', e);
+        return null;
+    }
+}
 
 // Almacén temporal de tokens de acceso al panel
 // Map<token, { slackId: string, username: string, expiresAt: number }>
@@ -130,6 +151,9 @@ function scheduleJob(slackId, time, type, dayOfWeek = null) {
 
         if (user) {
             try {
+                const token = await getSlackToken();
+                if (!token) throw new Error('No se pudo obtener el token del bot para enviar notificaciones.');
+
                 let result;
                 if (type === 'START') {
                     result = await kronosService.startTimer(user.kronos_user, user.kronos_password);
@@ -138,15 +162,20 @@ function scheduleJob(slackId, time, type, dayOfWeek = null) {
                 }
 
                 await slackClient.chat.postMessage({
+                    token: token,
                     channel: slackId,
                     text: `🤖 **Kronos ${type === 'START' ? 'Inicio' : 'Fin'}**: ${result.message}`
                 });
             } catch (e) {
                 console.error(e);
-                await slackClient.chat.postMessage({
-                    channel: slackId,
-                    text: `❌ Error Kronos (${type}): ${e.message}`
-                });
+                const token = await getSlackToken(); // Intentar obtener token de nuevo para log de error
+                if (token) {
+                    await slackClient.chat.postMessage({
+                        token: token,
+                        channel: slackId,
+                        text: `❌ Error Kronos (${type}): ${e.message}`
+                    });
+                }
             }
         } else {
             console.log(`No credentials found for ${slackId}`);
