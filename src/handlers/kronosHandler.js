@@ -168,10 +168,10 @@ const handleScheduleCommand = async ({ ack, command, client }) => {
 
 // Función genérica para programar un trabajo con node-schedule
 function scheduleJob(slackId, time, type, dayOfWeek = null) {
-    // ID único para el trabajo: slackId + tipo + dia (si aplica)
-    const jobKey = `${slackId}_${type}${dayOfWeek !== null ? '_' + dayOfWeek : ''}`;
+    // ID único para el trabajo: slackId + tipo + dia + HORA (para evitar sobrescribir turnos múltiples)
+    const jobKey = `${slackId}_${type}${dayOfWeek !== null ? '_' + dayOfWeek : ''}_${time}`;
 
-    if (jobs[jobKey]) jobs[jobKey].cancel();
+    if (jobs[jobKey]) jobs[jobKey].cancel(); // Cancelar si por alguna razón exacta ya existía (ej. recarga doble)
 
     const [hour, minute] = time.split(':');
     const rule = new schedule.RecurrenceRule();
