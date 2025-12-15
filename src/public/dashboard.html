@@ -157,6 +157,38 @@
         </div>
     </div>
 
+    <!-- Confirmation Modal -->
+    <div id="confirmModal"
+        class="fixed inset-0 z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeModal()"></div>
+
+        <!-- Content -->
+        <div
+            class="bg-white rounded-2xl shadow-2xl transform scale-95 transition-transform duration-300 w-full max-w-md p-6 relative z-10 mx-4">
+            <div class="text-center">
+                <div
+                    class="w-16 h-16 bg-kronos-100 text-kronos-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                </div>
+                <h3 class="text-xl font-bold text-slate-900 mb-2">¿Guardar Cambios?</h3>
+                <p class="text-slate-500 mb-6">Se actualizará tu horario semanal y el bot reprogramará tus tareas
+                    automáticamente.</p>
+
+                <div class="flex gap-3 justify-center">
+                    <button onclick="closeModal()"
+                        class="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors w-1/2">
+                        Cancelar
+                    </button>
+                    <button onclick="confirmSave()" id="confirmBtn"
+                        class="px-5 py-2.5 rounded-xl bg-kronos-600 text-white font-medium hover:bg-kronos-700 transition-colors w-1/2 flex justify-center items-center gap-2">
+                        <span>Confirmar</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts Logic -->
     <script>
         const days = [
@@ -167,106 +199,61 @@
             { id: 5, name: 'Viernes', icon: 'fa-glass-cheers text-amber-500' }
         ];
 
-        let currentSchedules = []; // Array plano de slots desde DB
+        let currentSchedules = [];
         let sessionExpiresAt = 0;
         let timerInterval;
 
-        // Obtener parámetros
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token');
         const user = urlParams.get('user') || 'Usuario';
 
-        // UI Inicial
         document.getElementById('userName').textContent = user;
         document.getElementById('userAvatar').textContent = user.charAt(0).toUpperCase();
 
         if (!token) {
-            alert('Token de acceso inválido. Vuelve a generar el enlace desde Slack.');
+            alert('Token de acceso inválido.');
             document.body.innerHTML = '<div class="flex items-center justify-center h-screen text-slate-500">Acceso Denegado</div>';
         }
 
-        // --- API CALLS ---
+        // --- MODAL LOGIC ---
 
-        async function loadData() {
-            try {
-                const res = await fetch(`/api/schedule?token=${token}`);
-                if (!res.ok) throw new Error('Error cargando datos');
-                const data = await res.json();
-
-                if (data.schedules) {
-                    currentSchedules = data.schedules;
-                }
-
-                if (data.expiresAt) {
-                    sessionExpiresAt = data.expiresAt;
-                    startSessionTimer();
-                }
-
-                renderAllDays();
-            } catch (error) {
-                console.error(error);
-                alert('No se pudo cargar tu horario.');
-            }
+        function saveChanges() {
+            // Abrir Modal
+            const modal = document.getElementById('confirmModal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.querySelector('div.transform').classList.remove('scale-95');
+            modal.querySelector('div.transform').classList.add('scale-100');
         }
 
-        function startSessionTimer() {
-            const timerEl = document.getElementById('sessionTimer');
-
-            clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                const now = Date.now();
-                const diff = sessionExpiresAt - now;
-
-                if (diff <= 0) {
-                    clearInterval(timerInterval);
-                    timerEl.textContent = "Expirado";
-                    timerEl.className = "px-3 py-1 bg-red-100 rounded-full text-xs font-mono text-red-500 font-bold";
-                    document.getElementById('saveBtn').disabled = true;
-                    document.body.style.opacity = '0.5';
-                    alert('La sesión ha expirado. Por favor genera un nuevo enlace en Slack con /panel');
-                    return;
-                }
-
-                const minutes = Math.floor(diff / 60000);
-                const seconds = Math.floor((diff % 60000) / 1000);
-
-                timerEl.textContent = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-                // Alerta visual si queda poco tiempo
-                if (minutes < 1) {
-                    timerEl.classList.remove('bg-slate-100', 'text-slate-500');
-                    timerEl.classList.add('bg-amber-100', 'text-amber-600');
-                }
-            }, 1000);
+        function closeModal() {
+            const modal = document.getElementById('confirmModal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            modal.querySelector('div.transform').classList.add('scale-95');
+            modal.querySelector('div.transform').classList.remove('scale-100');
         }
 
-        async function saveChanges() {
-            const btn = document.getElementById('saveBtn');
-            const icon = btn.querySelector('i');
+        async function confirmSave() {
+            const btn = document.getElementById('confirmBtn');
+            const originalContent = btn.innerHTML;
 
-            // Loading
+            // Loading state in modal
             btn.disabled = true;
-            icon.className = 'fa-solid fa-circle-notch fa-spin';
-            btn.classList.add('opacity-75');
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Guardando...';
 
             // Collect Data
             const slots = [];
-
             days.forEach(day => {
                 const dayContainer = document.getElementById(`day-slots-${day.id}`);
                 const rows = dayContainer.querySelectorAll('.slot-row');
                 const dayActive = document.querySelector(`input[name="active_day_${day.id}"]`).checked;
-
                 if (dayActive) {
                     rows.forEach(row => {
                         const start = row.querySelector('.start-time').value;
                         const end = row.querySelector('.end-time').value;
-
-                        // Solo guardar si tiene datos (aunque sea uno)
                         if (start || end) {
                             slots.push({
                                 day_of_week: day.id,
-                                start_time: start || null, // null si está vacío (node-schedule lo ignorará)
+                                start_time: start || null,
                                 end_time: end || null,
                                 is_active: true
                             });
@@ -283,52 +270,103 @@
                 });
 
                 if (res.ok) {
-                    showToast();
+                    showSuccessScreen();
                 } else {
                     alert('Error guardando cambios');
+                    closeModal();
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent;
                 }
             } catch (error) {
                 console.error(error);
                 alert('Error de conexión');
-            } finally {
+                closeModal();
                 btn.disabled = false;
-                icon.className = 'fa-solid fa-floppy-disk';
-                btn.classList.remove('opacity-75');
+                btn.innerHTML = originalContent;
             }
         }
 
-        // --- RENDER ---
+        function showSuccessScreen() {
+            document.body.innerHTML = `
+                <div class="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 animate-fade-in">
+                    <div class="bg-white p-8 rounded-3xl shadow-xl text-center max-w-sm w-full">
+                        <div class="w-20 h-20 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl animate-bounce">
+                            <i class="fa-solid fa-check"></i>
+                        </div>
+                        <h1 class="text-2xl font-bold text-slate-800 mb-2">¡Guardado!</h1>
+                        <p class="text-slate-500 mb-8">Tu configuración ha sido actualizada correctamente. Puedes cerrar esta ventana.</p>
+                        <button onclick="window.close()" class="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-black transition-colors">
+                            Cerrar Ventana
+                        </button>
+                        <p class="text-xs text-slate-400 mt-4">Si el botón no funciona, cierra la pestaña manualmente.</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- API & RENDER (Existing) ---
+
+        async function loadData() {
+            try {
+                const res = await fetch(`/api/schedule?token=${token}`);
+                if (!res.ok) throw new Error('Error');
+                const data = await res.json();
+
+                if (data.schedules) currentSchedules = data.schedules;
+                if (data.expiresAt) {
+                    sessionExpiresAt = data.expiresAt;
+                    startSessionTimer();
+                }
+                renderAllDays();
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        function startSessionTimer() {
+            const timerEl = document.getElementById('sessionTimer');
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                const now = Date.now();
+                const diff = sessionExpiresAt - now;
+                if (diff <= 0) {
+                    clearInterval(timerInterval);
+                    timerEl.textContent = "Expirado";
+                    timerEl.className = "px-3 py-1 bg-red-100 rounded-full text-xs font-mono text-red-500 font-bold";
+                    document.getElementById('saveBtn').disabled = true;
+                    document.body.style.opacity = '0.5';
+                    alert('La sesión ha expirado. Por favor genera un nuevo enlace en Slack con /panel');
+                    return;
+                }
+                const minutes = Math.floor(diff / 60000);
+                const seconds = Math.floor((diff % 60000) / 1000);
+                timerEl.textContent = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+                // Alerta visual si queda poco tiempo
+                if (minutes < 1) {
+                    timerEl.classList.remove('bg-slate-100', 'text-slate-500');
+                    timerEl.classList.add('bg-amber-100', 'text-amber-600');
+                }
+            }, 1000);
+        }
 
         function renderAllDays() {
             const container = document.getElementById('daysContainer');
             container.innerHTML = '';
-
-            // Verificamos si el usuario tiene ALGÚN dato guardado en total
             const hasAnyData = currentSchedules.length > 0;
 
             days.forEach(day => {
-                // Filtrar slots para este día
                 const mySlots = currentSchedules.filter(s => s.day_of_week === day.id);
-
-                // LÓGICA CORREGIDA:
-                // Si el usuario tiene datos guardados (hasAnyData = true),
-                // entonces este día es activo SOLO SI tiene sus propios slots.
-                // Si el usuario es nuevo (hasAnyData = false), activamos todo por defecto.
                 let isActive;
-                if (hasAnyData) {
-                    isActive = mySlots.length > 0;
-                } else {
-                    isActive = true; // Default para nuevos usuarios
-                }
+                if (hasAnyData) isActive = mySlots.length > 0;
+                else isActive = true;
 
-                // Estructura Base del Día
                 const dayCard = document.createElement('div');
                 dayCard.className = `group transition-all bg-white border-b border-slate-100 last:border-0 ${isActive ? '' : 'opacity-60 grayscale'}`;
                 dayCard.id = `day-card-${day.id}`;
 
                 dayCard.innerHTML = `
                     <div class="p-6 md:grid md:grid-cols-12 md:gap-4 md:items-start flex flex-col gap-4">
-                        <!-- Header Día & Toggle Master -->
                         <div class="md:col-span-3 flex items-center justify-between md:justify-start gap-4 pt-2">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 group-hover:bg-kronos-50 group-hover:text-kronos-600 transition-colors">
@@ -339,37 +377,28 @@
                                     <p class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold status-text">${isActive ? 'Activo' : 'Inactivo'}</p>
                                 </div>
                             </div>
-                            
                             <label class="relative inline-flex items-center cursor-pointer md:hidden">
                                 <input type="checkbox" name="active_day_${day.id}" class="sr-only peer" ${isActive ? 'checked' : ''} onchange="toggleDayMaster(${day.id}, this)">
                                 <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-kronos-500"></div>
                             </label>
                         </div>
-
-                        <!-- Toggle Desktop -->
                         <div class="md:col-span-1 hidden md:flex justify-center pt-3">
                             <label class="relative inline-flex items-center cursor-pointer" title="Activar/Desactivar Día">
                                 <input type="checkbox" name="active_day_${day.id}" class="sr-only peer" ${isActive ? 'checked' : ''} onchange="toggleDayMaster(${day.id}, this)">
                                 <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-kronos-500"></div>
                             </label>
                         </div>
-
-                        <!-- Slots Container -->
                         <div class="md:col-span-8 space-y-3" id="day-slots-${day.id}"></div>
                     </div>
                 `;
-
                 container.appendChild(dayCard);
 
-                // Renderizar Slots Internos
                 const slotsContainer = document.getElementById(`day-slots-${day.id}`);
-
                 if (mySlots.length > 0) {
                     mySlots.forEach((slot, index) => {
                         addSlotRow(slotsContainer, day.id, slot.start_time, slot.end_time, index === 0);
                     });
                 } else {
-                    // Default empty slot
                     addSlotRow(slotsContainer, day.id, '08:00', '15:00', true);
                 }
             });
@@ -378,7 +407,6 @@
         function addSlotRow(container, dayId, start = '', end = '', isFirst = false) {
             const row = document.createElement('div');
             row.className = 'slot-row flex items-center gap-3 animate-fade-in';
-
             row.innerHTML = `
                 <div class="grid grid-cols-2 gap-3 flex-grow">
                     <div class="relative">
@@ -390,7 +418,6 @@
                         <input type="time" value="${end}" class="end-time block w-full pl-9 pr-2 py-2 border border-slate-200 rounded-lg focus:ring-1 focus:ring-kronos-500 focus:border-kronos-500 text-sm shadow-sm hover:border-slate-300 bg-white">
                     </div>
                 </div>
-
                 <div class="flex items-center gap-1 w-16 justify-end">
                     ${isFirst
                     ? `<button type="button" onclick="addSlot(${dayId})" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-kronos-600 hover:bg-kronos-50 transition-colors" title="Añadir Franja"><i class="fa-solid fa-plus"></i></button>`
@@ -401,23 +428,17 @@
             container.appendChild(row);
         }
 
-        // --- ACTIONS ---
-
         window.addSlot = function (dayId) {
             const container = document.getElementById(`day-slots-${dayId}`);
             addSlotRow(container, dayId, '', '', false);
         };
-
         window.removeSlot = function (btn) {
-            const row = btn.closest('.slot-row');
-            row.remove();
+            btn.closest('.slot-row').remove();
         };
-
         window.toggleDayMaster = function (dayId, checkbox) {
             const card = document.getElementById(`day-card-${dayId}`);
             const statusText = card.querySelector('.status-text');
             const inputs = card.querySelectorAll('input[type="time"], button');
-
             if (checkbox.checked) {
                 card.classList.remove('opacity-60', 'grayscale');
                 statusText.textContent = 'Activo';
@@ -429,15 +450,6 @@
             }
         };
 
-        function showToast() {
-            const toast = document.getElementById('toast');
-            toast.classList.remove('translate-x-full');
-            setTimeout(() => {
-                toast.classList.add('translate-x-full');
-            }, 3000);
-        }
-
-        // Init
         loadData();
     </script>
 </body>
