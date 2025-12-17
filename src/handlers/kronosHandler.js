@@ -155,6 +155,41 @@ const sendScheduleConfirmation = async (slackId, slots) => {
     }
 };
 
+const handleStopCommand = async ({ ack, command }) => {
+    await ack();
+    const slackId = command.user_id;
+
+    // Usar 'getSlackToken' para obtener el token correcto de la instalación
+    const token = await getSlackToken();
+
+    try {
+        console.log(`🛑 Stopping all schedules for ${slackId}`);
+
+        // 1. Limpiar slots en BD (pero MANTENER usuario/pass en tabla users)
+        await db.saveUserSlots(slackId, []);
+
+        // 2. Cancelar jobs en memoria
+        await reloadUserSchedule(slackId);
+
+        if (token) {
+            await slackClient.chat.postMessage({
+                token: token,
+                channel: slackId,
+                text: '🛑 **Kronos Detenido**\n\nSe han pausado todas tus automatizaciones. Tus credenciales siguen guardadas.\n\n🏖️ ¡Disfruta tu descanso!\n\nCuando vuelvas, simplemente configura tu horario de nuevo con `/panel`.'
+            });
+        }
+    } catch (error) {
+        console.error(error);
+        if (token) {
+            await slackClient.chat.postMessage({
+                token: token,
+                channel: slackId,
+                text: `❌ Error al detener Kronos: ${error.message}`
+            });
+        }
+    }
+};
+
 const handleScheduleCommand = async ({ ack, command, client }) => {
     await ack();
     const time = command.text.trim();
@@ -295,6 +330,7 @@ module.exports = {
     handleLoginCommand,
     handlePanelCommand,
     handleScheduleCommand,
+    handleStopCommand,
     initSchedules,
     reloadUserSchedule,
     sendScheduleConfirmation, // Exportado para usar en API
