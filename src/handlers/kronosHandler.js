@@ -155,37 +155,37 @@ const sendScheduleConfirmation = async (slackId, slots) => {
     }
 };
 
-const handleStopCommand = async ({ ack, command }) => {
+const handleStopCommand = async ({ ack, command, client }) => {
+    // 1. ACK INMEDIATO
     await ack();
-    const slackId = command.user_id;
 
-    // Usar 'getSlackToken' para obtener el token correcto de la instalación
-    const token = await getSlackToken();
+    const slackId = command.user_id;
 
     try {
         console.log(`🛑 Stopping all schedules for ${slackId}`);
 
-        // 1. Limpiar slots en BD (pero MANTENER usuario/pass en tabla users)
+        // 2. Ejecutar lógica
+        // Limpiar slots en BD
         await db.saveUserSlots(slackId, []);
 
-        // 2. Cancelar jobs en memoria
+        // Cancelar jobs en memoria
         await reloadUserSchedule(slackId);
 
-        if (token) {
-            await slackClient.chat.postMessage({
-                token: token,
-                channel: slackId,
-                text: '🛑 **Kronos Detenido**\n\nSe han pausado todas tus automatizaciones. Tus credenciales siguen guardadas.\n\n🏖️ ¡Disfruta tu descanso!\n\nCuando vuelvas, simplemente configura tu horario de nuevo con `/panel`.'
-            });
-        }
+        // 3. Responder usando el cliente de Bolt (ya autenticado)
+        await client.chat.postMessage({
+            channel: slackId,
+            text: '🛑 **Kronos Detenido**\n\nSe han pausado todas tus automatizaciones. Tus credenciales siguen guardadas.\n\n🏖️ ¡Disfruta tu descanso!\n\nCuando vuelvas, simplemente configura tu horario de nuevo con `/panel`.'
+        });
+
     } catch (error) {
         console.error(error);
-        if (token) {
-            await slackClient.chat.postMessage({
-                token: token,
+        try {
+            await client.chat.postMessage({
                 channel: slackId,
                 text: `❌ Error al detener Kronos: ${error.message}`
             });
+        } catch (e) {
+            console.error('Error enviando mensaje de error:', e);
         }
     }
 };
