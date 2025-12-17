@@ -96,8 +96,17 @@ app.use(async ({ logger, body, next }) => {
 // --- COMANDOS ---
 app.command('/bus', handleBusCommand);
 app.command('/realTimeBus', handleRealTimeBusCommand);
+// Kronos
 app.command('/login', handleLoginCommand);
-app.command('/panel', handlePanelCommand); // <--- NUEVO COMANDO
+app.command('/panel', handlePanelCommand);
+
+console.log('🛠️ Registering /stop command. Handler type:', typeof handleStopCommand);
+if (typeof handleStopCommand !== 'function') {
+  console.error('❌ CRITICAL ERROR: handleStopCommand is not a function! Check exports in kronosHandler.js');
+}
+
+app.command('/stop', handleStopCommand);
+// app.command('/horario', handleScheduleCommand); // Legacy
 app.command('/programar', handleScheduleCommand);
 
 // --- ACCIONES (BOTONES) ---

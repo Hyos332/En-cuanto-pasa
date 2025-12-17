@@ -156,37 +156,39 @@ const sendScheduleConfirmation = async (slackId, slots) => {
 };
 
 const handleStopCommand = async ({ ack, command, client }) => {
-    // 1. ACK INMEDIATO
+    // 1. ACK lo primerísimo
     await ack();
 
     const slackId = command.user_id;
+    console.log(`🛑 /stop command received from ${slackId}`);
 
     try {
-        console.log(`🛑 Stopping all schedules for ${slackId}`);
-
-        // 2. Ejecutar lógica
-        // Limpiar slots en BD
-        await db.saveUserSlots(slackId, []);
-
-        // Cancelar jobs en memoria
-        await reloadUserSchedule(slackId);
-
-        // 3. Responder usando el cliente de Bolt (ya autenticado)
+        // Test simple para validar conexión
         await client.chat.postMessage({
             channel: slackId,
-            text: '🛑 **Kronos Detenido**\n\nSe han pausado todas tus automatizaciones. Tus credenciales siguen guardadas.\n\n🏖️ ¡Disfruta tu descanso!\n\nCuando vuelvas, simplemente configura tu horario de nuevo con `/panel`.'
+            text: '🛑 **Comando Recibido**. Procesando detención...'
         });
 
-    } catch (error) {
-        console.error(error);
+        // Lógica Real (Desactivar BD)
+        await db.saveUserSlots(slackId, []);
+
+        // Recargar (Stop jobs)
+        // Usamos un try-catch interno por si reload falla
         try {
-            await client.chat.postMessage({
-                channel: slackId,
-                text: `❌ Error al detener Kronos: ${error.message}`
-            });
-        } catch (e) {
-            console.error('Error enviando mensaje de error:', e);
+            await reloadUserSchedule(slackId);
+        } catch (reloadError) {
+            console.error('Error reloading schedule:', reloadError);
+            // No bloqueamos info al usuario
         }
+
+        // Mensaje Final
+        await client.chat.postMessage({
+            channel: slackId,
+            text: '✅ **Automatización Detenida**. ¡Disfruta tu tiempo libre!'
+        });
+
+    } catch (e) {
+        console.error('Error in /stop command:', e);
     }
 };
 
