@@ -438,9 +438,17 @@
             btn.closest('.slot-row').remove();
         };
         window.toggleDayMaster = function (dayId, checkbox) {
+            // Sincronizar todos los checkboxes de este día (Móvil y Desktop)
+            const allCheckboxes = document.querySelectorAll(`input[name="active_day_${dayId}"]`);
+            allCheckboxes.forEach(cb => {
+                if (cb !== checkbox) cb.checked = checkbox.checked;
+            });
+
+            // Actualizar UI
             const card = document.getElementById(`day-card-${dayId}`);
             const statusText = card.querySelector('.status-text');
             const inputs = card.querySelectorAll('input[type="time"], button');
+
             if (checkbox.checked) {
                 card.classList.remove('opacity-60', 'grayscale');
                 statusText.textContent = 'Activo';
