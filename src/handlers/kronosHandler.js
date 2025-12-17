@@ -110,41 +110,44 @@ const sendScheduleConfirmation = async (slackId, slots) => {
         const token = await getSlackToken();
         if (!token) return;
 
-        // Agrupar por días
         const daysMap = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 0: 'Domingo' };
-        let summary = '';
 
-        // Ordenar slots (Manejo robusto de nulos)
-        slots.sort((a, b) => {
-            const dayDiff = a.day_of_week - b.day_of_week;
-            if (dayDiff !== 0) return dayDiff;
-
-            const timeA = a.start_time || '';
-            const timeB = b.start_time || '';
-            return timeA.localeCompare(timeB);
-        });
-
+        // Agrupar slots existentes
         const groups = {};
         slots.forEach(s => {
             if (!groups[s.day_of_week]) groups[s.day_of_week] = [];
-            // Si falta alguna hora, mostrar ??:??
             const start = s.start_time || '??:??';
             const end = s.end_time || '??:??';
             groups[s.day_of_week].push(`${start} - ${end}`);
         });
 
-        if (Object.keys(groups).length === 0) {
-            summary = '_Sin horarios activos (Días libres)_';
-        } else {
-            for (const [dayCode, times] of Object.entries(groups)) {
-                summary += `• *${daysMap[dayCode]}:* ${times.join(', ')}\n`;
+        let summary = '';
+        const workWeek = [1, 2, 3, 4, 5]; // Lunes a Viernes estándar
+
+        // Mostrar reporte Lunes-Viernes siempre (para claridad)
+        workWeek.forEach(dayCode => {
+            const dayName = daysMap[dayCode];
+            if (groups[dayCode]) {
+                // Ordenar horas dentro del día
+                groups[dayCode].sort();
+                summary += `• *${dayName}:* ${groups[dayCode].join(', ')}\n`;
+            } else {
+                summary += `• *${dayName}:* _Inactivo_\n`;
             }
-        }
+        });
+
+        // Añadir Fin de Semana solo si hay algo programado (raro pero posible)
+        [6, 0].forEach(dayCode => {
+            if (groups[dayCode]) {
+                groups[dayCode].sort();
+                summary += `• *${daysMap[dayCode]}:* ${groups[dayCode].join(', ')}\n`;
+            }
+        });
 
         await slackClient.chat.postMessage({
             token: token,
             channel: slackId,
-            text: `✅ **Horario Guardado Correctamente**\n\nAsí ha quedado tu configuración semanal:\n\n${summary}\n\n¿Te equivocaste? Genera un nuevo panel con \`/panel\``
+            text: `✅ **Horario Actualizado**\n\nTu configuración semanal ha quedado así:\n\n${summary}\n\nSi necesitas pausar todo temporalmente, usa \`/stop\`.`
         });
 
     } catch (e) {
