@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { App, ExpressReceiver } = require('@slack/bolt');
-const express = require('express'); // Necesario para static files
+const express = require('express');
 const path = require('path');
 const installationStore = require('./src/utils/installationStore');
 const { handleBusCommand, handleRealTimeBusCommand } = require('./src/handlers/busHandler');
@@ -8,7 +8,54 @@ const { handleRefreshSchedule, handleRefreshRealTime } = require('./src/handlers
 const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, handleStopCommand, initSchedules, reloadUserSchedule, sendScheduleConfirmation, tokenStore } = require('./src/handlers/kronosHandler');
 const axios = require('axios');
 const config = require('./src/config');
-const db = require('./src/db'); // Necesario para la API
+const db = require('./src/db'); 
+
+const TIME_FORMAT_REGEX = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+
+function toMinutes(time) {
+  const [hour, minute] = time.split(':').map(Number);
+  return (hour * 60) + minute;
+}
+
+function normalizeSlots(rawSlots) {
+  if (!Array.isArray(rawSlots)) {
+    return null;
+  }
+
+  const normalized = [];
+
+  for (const slot of rawSlots) {
+    if (!slot || typeof slot !== 'object') {
+      return null;
+    }
+
+    const dayOfWeek = Number(slot.day_of_week);
+    const startTime = typeof slot.start_time === 'string' ? slot.start_time.trim() : '';
+    const endTime = typeof slot.end_time === 'string' ? slot.end_time.trim() : '';
+    const isActive = slot.is_active !== false;
+
+    if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+      return null;
+    }
+
+    if (!TIME_FORMAT_REGEX.test(startTime) || !TIME_FORMAT_REGEX.test(endTime)) {
+      return null;
+    }
+
+    if (toMinutes(startTime) >= toMinutes(endTime)) {
+      return null;
+    }
+
+    normalized.push({
+      day_of_week: dayOfWeek,
+      start_time: startTime,
+      end_time: endTime,
+      is_active: Boolean(isActive)
+    });
+  }
+
+  return normalized;
+}
 
 // 1. Inicializar ExpressReceiver (Servidor Web)
 const receiver = new ExpressReceiver({
@@ -31,6 +78,10 @@ receiver.router.use(express.json()); // Permitir JSON en body
 // Ruta principal del Dashboard
 receiver.router.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/public/dashboard.html'));
+});
+
+receiver.router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
 });
 
 // API: Obtener datos
@@ -63,17 +114,20 @@ receiver.router.post('/api/schedule', async (req, res) => {
     return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 
-  const { slots } = req.body; // Array de time_slots
+  const validatedSlots = normalizeSlots(req.body?.slots);
+  if (!validatedSlots) {
+    return res.status(400).json({ error: 'Payload inválido para slots' });
+  }
 
   try {
     // Guardar todos los slots (vaciando anteriores)
-    await db.saveUserSlots(session.slackId, slots);
+    await db.saveUserSlots(session.slackId, validatedSlots);
 
     // HOT RELOAD: Recargar tareas en memoria inmediatamente
     await reloadUserSchedule(session.slackId);
 
     // Notificar al usuario (asíncrono)
-    sendScheduleConfirmation(session.slackId, slots);
+    sendScheduleConfirmation(session.slackId, validatedSlots);
 
     res.json({ success: true });
   } catch (e) {
@@ -164,9 +218,9 @@ app.command('/botversion', async ({ ack, respond }) => {
 
 (async () => {
   await app.start(process.env.PORT || 3000);
-  await initSchedules(app);
+  await initSchedules();
   console.log('='.repeat(80));
-  console.log('⚡️ BOT INICIADO culo con caca para carlisius - VERSION 3.0.1 - KRONOS ENABLED');
+  console.log('⚡️ BOT INICIADO - VERSION 3.0.2 - KRONOS ENABLED');
   console.log('🕒 Timestamp:', new Date().toISOString());
   console.log('🔌 Puerto:', process.env.PORT || 3000);
   console.log('='.repeat(80));

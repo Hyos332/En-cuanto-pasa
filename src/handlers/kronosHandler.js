@@ -13,17 +13,42 @@ const jobs = {};
 
 
 async function getSlackToken() {
+    if (process.env.SLACK_BOT_TOKEN) {
+        return process.env.SLACK_BOT_TOKEN;
+    }
+
     try {
         const dataDir = path.join(__dirname, '../../data');
         const files = await fs.readdir(dataDir);
-        
-        const installFile = files.find(f => (f.startsWith('T') || f.startsWith('E')) && f.endsWith('.json'));
 
-        if (!installFile) return null;
+        const installFiles = files.filter(f => f.endsWith('.json'));
+        if (installFiles.length === 0) return null;
 
-        const content = await fs.readFile(path.join(dataDir, installFile), 'utf8');
-        const data = JSON.parse(content);
-        return data.bot?.token;
+        const installations = await Promise.all(installFiles.map(async file => {
+            try {
+                const fullPath = path.join(dataDir, file);
+                const [content, stats] = await Promise.all([
+                    fs.readFile(fullPath, 'utf8'),
+                    fs.stat(fullPath)
+                ]);
+                const data = JSON.parse(content);
+                const token = data.bot?.token;
+
+                return {
+                    token,
+                    mtimeMs: stats.mtimeMs
+                };
+            } catch (error) {
+                return null;
+            }
+        }));
+
+        const withToken = installations
+            .filter(Boolean)
+            .filter(item => item.token);
+
+        withToken.sort((a, b) => b.mtimeMs - a.mtimeMs);
+        return withToken[0]?.token || null;
     } catch (e) {
         console.error('Error leyendo token de Slack:', e);
         return null;
@@ -67,9 +92,13 @@ const handleLoginCommand = async ({ ack, command, client }) => {
 
     } catch (error) {
         console.error('❌ [KRONOS] Error guardando credenciales:', error);
+        const missingSecret = error.message && error.message.includes('KRONOS_CREDENTIALS_SECRET');
+
         await client.chat.postMessage({
             channel: slackId,
-            text: '❌ Hubo un error guardando tus datos. Inténtalo de nuevo.'
+            text: missingSecret
+                ? '❌ Falta configurar `KRONOS_CREDENTIALS_SECRET` en el servidor. Contacta al administrador.'
+                : '❌ Hubo un error guardando tus datos. Inténtalo de nuevo.'
         });
     }
 };
@@ -208,7 +237,7 @@ const handleScheduleCommand = async ({ ack, command, client }) => {
     await db.saveSchedule(slackId, time);
 
     
-    scheduleJob(slackId, time, 'STOP', client);
+    scheduleJob(slackId, time, 'STOP');
 
     await client.chat.postMessage({
         channel: slackId,
@@ -307,7 +336,7 @@ const reloadUserSchedule = async (slackId) => {
 };
 
 
-const initSchedules = async (app) => {
+const initSchedules = async () => {
     try {
         
         const oldSchedules = await db.getAllSchedules();

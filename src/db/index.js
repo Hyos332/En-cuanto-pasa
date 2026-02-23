@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const { encryptSecret, decryptSecret } = require('../utils/credentialCrypto');
 
 const dbPath = path.resolve(__dirname, '../../data/kronos.db');
 const dataDir = path.dirname(dbPath);
@@ -10,6 +11,17 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const db = new sqlite3.Database(dbPath);
+
+function mapUserRowWithDecryptedPassword(row) {
+    if (!row) {
+        return row;
+    }
+
+    return {
+        ...row,
+        kronos_password: decryptSecret(row.kronos_password)
+    };
+}
 
 db.serialize(() => {
     db.run('CREATE TABLE IF NOT EXISTS users (' +
@@ -38,8 +50,16 @@ db.serialize(() => {
 module.exports = {
     saveUser: (slackId, user, password) => {
         return new Promise((resolve, reject) => {
+            let encryptedPassword;
+            try {
+                encryptedPassword = encryptSecret(password);
+            } catch (error) {
+                reject(error);
+                return;
+            }
+
             db.run('INSERT OR REPLACE INTO users (slack_id, kronos_user, kronos_password) VALUES (?, ?, ?)',
-                [slackId, user, password], (err) => {
+                [slackId, user, encryptedPassword], (err) => {
                     if (err) reject(err);
                     else resolve();
                 });
@@ -48,8 +68,16 @@ module.exports = {
     getUser: (slackId) => {
         return new Promise((resolve, reject) => {
             db.get('SELECT * FROM users WHERE slack_id = ?', [slackId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
+                if (err) {
+                    reject(err);
+                    return;
+                }
+
+                try {
+                    resolve(mapUserRowWithDecryptedPassword(row));
+                } catch (error) {
+                    reject(error);
+                }
             });
         });
     },
@@ -121,8 +149,16 @@ module.exports = {
                 'FROM time_slots w ' +
                 'JOIN users u ON w.slack_id = u.slack_id ' +
                 'WHERE w.is_active = 1', [], (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+
+                    try {
+                        resolve(rows.map(mapUserRowWithDecryptedPassword));
+                    } catch (error) {
+                        reject(error);
+                    }
                 });
         });
     },
@@ -133,8 +169,16 @@ module.exports = {
                 'FROM schedules s ' +
                 'JOIN users u ON s.slack_id = u.slack_id ' +
                 'WHERE s.active = 1', [], (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+
+                    try {
+                        resolve(rows.map(mapUserRowWithDecryptedPassword));
+                    } catch (error) {
+                        reject(error);
+                    }
                 });
         });
     }
