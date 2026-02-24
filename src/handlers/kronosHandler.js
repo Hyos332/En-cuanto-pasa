@@ -271,10 +271,14 @@ const handleSemanalCommand = async ({ ack, command, respond }) => {
 
         await respond({
             response_type: 'ephemeral',
-            text: '👀 Sí, estoy viendo Reportes en Kronos... (`semanal-v2`)'
+            text: '👀 Buscando `angel.romero` en Reportes... (`semanal-v3`)'
         });
 
-        const result = await kronosService.getWeeklyReportsFirstPerson(user.kronos_user, user.kronos_password);
+        const result = await kronosService.getWeeklyReportUserHours(
+            user.kronos_user,
+            user.kronos_password,
+            'angel.romero'
+        );
         if (!result.success) {
             await respond({
                 response_type: 'ephemeral',
@@ -285,7 +289,7 @@ const handleSemanalCommand = async ({ ack, command, respond }) => {
 
         await respond({
             response_type: 'ephemeral',
-            text: ` Entré al primer detalle de Reportes.\n• Nombre: *${result.firstName || 'N/D'}*\n• Usuario: \`${result.firstUsername || 'N/D'}\`\n• Total horas: \`${result.firstTotalHours || 'N/D'}\`\n• Equipo: \`${result.firstTeam || 'N/D'}\``
+            text: `✅ Reporte semanal encontrado.\n• Nombre: *${result.name || 'N/D'}*\n• Usuario: \`${result.username || 'angel.romero'}\`\n• Total horas: \`${result.totalHours || 'N/D'}\`\n• Equipo: \`${result.team || 'N/D'}\``
         });
     } catch (error) {
         console.error('Error in /semanal command:', error);

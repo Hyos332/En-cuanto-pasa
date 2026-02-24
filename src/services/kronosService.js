@@ -284,6 +284,88 @@ async function extractUserFromDetail(page, fallback) {
     };
 }
 
+async function extractReportUserByUsername(page, targetUsername, timeout = 45000) {
+    const normalizedTarget = (targetUsername || '').trim().toLowerCase();
+    if (!normalizedTarget) {
+        throw new Error('targetUsername inválido para búsqueda en Reportes.');
+    }
+
+    await waitForReportsView(page, 20000);
+
+    await page.waitForFunction((target) => {
+        const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const toRow = (cells) => ({
+            name: cells[0] || null,
+            username: cells[1] || null,
+            totalHours: cells[2] || null,
+            team: cells[3] || null
+        });
+
+        const rows = [];
+
+        const tableRows = Array.from(globalThis.document.querySelectorAll('table tbody tr'))
+            .filter(row => row.querySelectorAll('td').length > 0);
+        tableRows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent || '').trim());
+            rows.push(toRow(cells));
+        });
+
+        const gridRows = Array.from(globalThis.document.querySelectorAll('[role="row"]'))
+            .filter(row => row.querySelectorAll('[role="gridcell"]').length > 0);
+        gridRows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('[role="gridcell"]')).map(cell => (cell.textContent || '').trim());
+            rows.push(toRow(cells));
+        });
+
+        return rows.some(row => normalize(row.username) === target && Boolean(row.totalHours));
+    }, { timeout }, normalizedTarget);
+
+    const result = await page.evaluate((target) => {
+        const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const toRow = (cells) => ({
+            name: cells[0] || null,
+            username: cells[1] || null,
+            totalHours: cells[2] || null,
+            team: cells[3] || null
+        });
+
+        const rows = [];
+
+        const tableRows = Array.from(globalThis.document.querySelectorAll('table tbody tr'))
+            .filter(row => row.querySelectorAll('td').length > 0);
+        tableRows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent || '').trim());
+            rows.push(toRow(cells));
+        });
+
+        const gridRows = Array.from(globalThis.document.querySelectorAll('[role="row"]'))
+            .filter(row => row.querySelectorAll('[role="gridcell"]').length > 0);
+        gridRows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('[role="gridcell"]')).map(cell => (cell.textContent || '').trim());
+            rows.push(toRow(cells));
+        });
+
+        const found = rows.find(row => normalize(row.username) === target) || null;
+        const visibleUsers = rows
+            .map(row => row.username)
+            .filter(Boolean)
+            .slice(0, 15);
+
+        return { found, visibleUsers };
+    }, normalizedTarget);
+
+    if (!result.found) {
+        const listed = result.visibleUsers.length > 0 ? result.visibleUsers.join(', ') : 'sin usuarios visibles';
+        throw new Error(`No encontré al usuario ${targetUsername} en Reportes. Usuarios visibles: ${listed}`);
+    }
+
+    if (!result.found.totalHours) {
+        throw new Error(`Encontré al usuario ${targetUsername}, pero no pude leer su total de horas.`);
+    }
+
+    return result.found;
+}
+
 async function stopTimer(username, password) {
     let browser;
     try {
@@ -501,4 +583,47 @@ async function getWeeklyReportsFirstPerson(username, password) {
     }
 }
 
-module.exports = { stopTimer, startTimer, getWeeklyReportsFirstPerson };
+async function getWeeklyReportUserHours(username, password, targetUsername) {
+    let browser;
+
+    try {
+        const launched = await launchKronosPage();
+        browser = launched.browser;
+        const page = launched.page;
+
+        console.log(`[Kronos] Attempting weekly report lookup for user: ${username}. Target: ${targetUsername}`);
+
+        await loginToKronos(page, username, password);
+        await clickSidebarReports(page);
+
+        const row = await extractReportUserByUsername(page, targetUsername, 45000);
+        return {
+            success: true,
+            name: row.name,
+            username: row.username,
+            totalHours: row.totalHours,
+            team: row.team
+        };
+    } catch (error) {
+        let context = '';
+        try {
+            if (browser) {
+                const pages = await browser.pages();
+                const activePage = pages[0];
+                if (activePage) {
+                    const info = await getPageDebugInfo(activePage);
+                    context = ` [URL:${info.url}] [TITLE:${info.title}] [SNIPPET:${info.snippet}]`;
+                }
+            }
+        } catch (ctxError) {
+            context = '';
+        }
+
+        console.error('Kronos Weekly User Lookup Error:', error);
+        return { success: false, message: `Error: ${error.message}${context}` };
+    } finally {
+        if (browser) await browser.close();
+    }
+}
+
+module.exports = { stopTimer, startTimer, getWeeklyReportsFirstPerson, getWeeklyReportUserHours };
