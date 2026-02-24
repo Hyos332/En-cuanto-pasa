@@ -285,7 +285,7 @@ const handleSemanalCommand = async ({ ack, command, respond }) => {
 
         await respond({
             response_type: 'ephemeral',
-            text: `✅ Reportes detectado. Primera persona de la tabla: *${result.firstName}*`
+            text: ` Entré al primer detalle de Reportes.\n• Nombre: *${result.firstName || 'N/D'}*\n• Usuario: \`${result.firstUsername || 'N/D'}\`\n• Total horas: \`${result.firstTotalHours || 'N/D'}\`\n• Equipo: \`${result.firstTeam || 'N/D'}\``
         });
     } catch (error) {
         console.error('Error in /semanal command:', error);

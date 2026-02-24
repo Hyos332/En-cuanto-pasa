@@ -69,28 +69,118 @@ async function clickSidebarReports(page) {
     }
 }
 
-async function extractFirstReportName(page) {
+async function extractFirstReportRow(page) {
     await page.waitForFunction(() => {
         const rows = Array.from(globalThis.document.querySelectorAll('table tbody tr'));
         return rows.some(row => row.querySelectorAll('td').length > 0);
     }, { timeout: 20000 });
 
-    const firstName = await page.evaluate(() => {
+    const rowData = await page.evaluate(() => {
         const rows = Array.from(globalThis.document.querySelectorAll('table tbody tr'));
         const firstRow = rows.find(row => row.querySelectorAll('td').length > 0);
         if (!firstRow) {
             return null;
         }
 
-        const firstCell = firstRow.querySelector('td');
-        return firstCell ? firstCell.textContent.trim() : null;
+        const cells = Array.from(firstRow.querySelectorAll('td')).map(cell => (cell.textContent || '').trim());
+        return {
+            name: cells[0] || null,
+            username: cells[1] || null,
+            totalHours: cells[2] || null,
+            team: cells[3] || null
+        };
     });
 
-    if (!firstName) {
-        throw new Error('No se pudo leer la primera persona del reporte.');
+    if (!rowData || !rowData.name) {
+        throw new Error('No se pudo leer la primera fila del reporte.');
     }
 
-    return firstName;
+    return rowData;
+}
+
+async function openFirstReportDetail(page) {
+    const currentUrl = page.url();
+
+    const action = await page.evaluate(() => {
+        const rows = Array.from(globalThis.document.querySelectorAll('table tbody tr'));
+        const firstRow = rows.find(row => row.querySelectorAll('td').length > 0);
+
+        if (!firstRow) {
+            return { clicked: false, href: null };
+        }
+
+        const candidates = Array.from(firstRow.querySelectorAll('a,button,[role="button"],span,div'));
+        const target = candidates.find(el => (el.textContent || '').toLowerCase().includes('ver detalle'));
+
+        if (!target) {
+            return { clicked: false, href: null };
+        }
+
+        const link = target.closest('a');
+        const href = link ? link.getAttribute('href') : null;
+
+        if (!href) {
+            const clickable = target.closest('a,button,[role="button"]') || target;
+            clickable.click();
+        }
+
+        return { clicked: true, href };
+    });
+
+    if (!action.clicked) {
+        throw new Error('No se encontró la acción "Ver detalle" en la primera fila.');
+    }
+
+    if (action.href) {
+        const detailUrl = new URL(action.href, KRONOS_BASE_URL).toString();
+        await page.goto(detailUrl, { waitUntil: 'networkidle2' });
+        return;
+    }
+
+    await Promise.race([
+        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }),
+        page.waitForFunction(previousUrl => globalThis.location.href !== previousUrl, { timeout: 10000 }, currentUrl),
+        page.waitForFunction(() => {
+            const markers = [
+                'detalle',
+                'resumen',
+                'horas registradas',
+                'jornada'
+            ];
+            const text = (globalThis.document.body?.innerText || '').toLowerCase();
+            return markers.some(marker => text.includes(marker));
+        }, { timeout: 10000 })
+    ]).catch(() => null);
+}
+
+async function extractUserFromDetail(page, fallback) {
+    const detailData = await page.evaluate(() => {
+        const bodyText = (globalThis.document.body?.innerText || '').replace(/\r/g, '');
+        const lines = bodyText.split('\n').map(line => line.trim()).filter(Boolean);
+
+        const userLineIndex = lines.findIndex(line => line.toLowerCase() === 'usuario');
+        const nameLineIndex = lines.findIndex(line => line.toLowerCase() === 'nombre');
+
+        const username = userLineIndex >= 0 && lines[userLineIndex + 1] ? lines[userLineIndex + 1] : null;
+        const name = nameLineIndex >= 0 && lines[nameLineIndex + 1] ? lines[nameLineIndex + 1] : null;
+
+        const titleCandidate = lines.find(line => {
+            const lower = line.toLowerCase();
+            if (lower.includes('reportes') || lower.includes('resumen de horas')) return false;
+            if (line.length < 3 || line.length > 80) return false;
+            return /^[a-zA-ZÀ-ÿ0-9.\s-]+$/.test(line);
+        });
+
+        return { username, name, titleCandidate };
+    });
+
+    return {
+        name: detailData.name || fallback.name,
+        username: detailData.username || fallback.username,
+        totalHours: fallback.totalHours,
+        team: fallback.team,
+        detailLabel: detailData.titleCandidate || detailData.name || fallback.name
+    };
 }
 
 async function stopTimer(username, password) {
@@ -269,9 +359,19 @@ async function getWeeklyReportsFirstPerson(username, password) {
 
         await loginToKronos(page, username, password);
         await clickSidebarReports(page);
+        const firstRow = await extractFirstReportRow(page);
 
-        const firstName = await extractFirstReportName(page);
-        return { success: true, firstName };
+        await openFirstReportDetail(page);
+        const detail = await extractUserFromDetail(page, firstRow);
+
+        return {
+            success: true,
+            firstName: detail.name || firstRow.name,
+            firstUsername: detail.username || firstRow.username,
+            firstTotalHours: detail.totalHours || firstRow.totalHours,
+            firstTeam: detail.team || firstRow.team,
+            detailLabel: detail.detailLabel || firstRow.name
+        };
     } catch (error) {
         console.error('Kronos Weekly Report Error:', error);
         return { success: false, message: `Error: ${error.message}` };
