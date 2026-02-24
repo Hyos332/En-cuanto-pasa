@@ -61,7 +61,7 @@ async function clickSidebarReports(page) {
         }
 
         const clickable = target.closest('a,button,[role="button"]') || target;
-        clickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        clickable.click();
         return true;
     });
 
@@ -72,11 +72,13 @@ async function clickSidebarReports(page) {
 
 async function extractFirstReportName(page) {
     await page.waitForFunction(() => {
+        // eslint-disable-next-line no-undef
         const rows = Array.from(document.querySelectorAll('table tbody tr'));
         return rows.some(row => row.querySelectorAll('td').length > 0);
     }, { timeout: 20000 });
 
     const firstName = await page.evaluate(() => {
+        // eslint-disable-next-line no-undef
         const rows = Array.from(document.querySelectorAll('table tbody tr'));
         const firstRow = rows.find(row => row.querySelectorAll('td').length > 0);
         if (!firstRow) {
@@ -101,10 +103,8 @@ async function stopTimer(username, password) {
         browser = launched.browser;
         const page = launched.page;
 
-        // Función auxiliar para buscar elementos por texto (reemplazo de $x)
         const findElementByText = async (selector, text) => {
             return page.evaluateHandle((selector, text) => {
-                // eslint-disable-next-line no-undef
                 const elements = [...document.querySelectorAll(selector)];
                 return elements.find(el => el.innerText.includes(text));
             }, selector, text);
@@ -118,7 +118,6 @@ async function stopTimer(username, password) {
         await page.type('input[name="user"]', username);
         await page.type('input[name="password"]', password);
 
-        // Buscar botón de Acceder
         let loginButton = await page.$('button[type="submit"]');
         if (!loginButton) {
             const btnHandle = await findElementByText('button', 'Acceder');
