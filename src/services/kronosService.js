@@ -127,64 +127,103 @@ async function getPageDebugInfo(page) {
     });
 }
 
-async function extractFirstReportRow(page) {
-    await waitForReportsView(page, 20000);
+function mergeRowData(primary = {}, secondary = {}) {
+    const pick = (key) => primary[key] || secondary[key] || null;
+    return {
+        name: pick('name'),
+        username: pick('username'),
+        totalHours: pick('totalHours'),
+        team: pick('team')
+    };
+}
+
+async function extractFirstReportRow(page, timeout = 8000) {
+    await waitForReportsView(page, timeout + 4000);
 
     await page.waitForFunction(() => {
-        const rows = Array.from(globalThis.document.querySelectorAll('table tbody tr'));
-        return rows.some(row => row.querySelectorAll('td').length > 0);
-    }, { timeout: 20000 });
+        const tableRows = Array.from(globalThis.document.querySelectorAll('table tbody tr'))
+            .filter(row => row.querySelectorAll('td').length > 0);
+        const gridRows = Array.from(globalThis.document.querySelectorAll('[role="row"]'))
+            .filter(row => row.querySelectorAll('[role="gridcell"]').length > 0);
+
+        return tableRows.length > 0 || gridRows.length > 0;
+    }, { timeout });
 
     const rowData = await page.evaluate(() => {
-        const rows = Array.from(globalThis.document.querySelectorAll('table tbody tr'));
-        const firstRow = rows.find(row => row.querySelectorAll('td').length > 0);
-        if (!firstRow) {
-            return null;
+        const mapRow = (row) => {
+            const cells = Array.from(row.querySelectorAll('td,[role="gridcell"]'))
+                .map(cell => (cell.textContent || '').trim())
+                .filter(Boolean);
+
+            return {
+                name: cells[0] || null,
+                username: cells[1] || null,
+                totalHours: cells[2] || null,
+                team: cells[3] || null
+            };
+        };
+
+        const firstTableRow = Array.from(globalThis.document.querySelectorAll('table tbody tr'))
+            .find(row => row.querySelectorAll('td').length > 0);
+        if (firstTableRow) {
+            return mapRow(firstTableRow);
         }
 
-        const cells = Array.from(firstRow.querySelectorAll('td')).map(cell => (cell.textContent || '').trim());
-        return {
-            name: cells[0] || null,
-            username: cells[1] || null,
-            totalHours: cells[2] || null,
-            team: cells[3] || null
-        };
+        const firstGridRow = Array.from(globalThis.document.querySelectorAll('[role="row"]'))
+            .find(row => row.querySelectorAll('[role="gridcell"]').length > 0);
+        if (firstGridRow) {
+            return mapRow(firstGridRow);
+        }
+
+        return null;
     });
 
-    if (!rowData || !rowData.name) {
+    if (!rowData || (!rowData.name && !rowData.username)) {
         throw new Error('No se pudo leer la primera fila del reporte.');
     }
 
     return rowData;
 }
 
-async function openFirstReportDetail(page) {
+async function openFirstReportDetail(page, timeout = 45000) {
     const currentUrl = page.url();
 
+    await page.waitForFunction(() => {
+        const candidates = Array.from(globalThis.document.querySelectorAll('a,button,[role="button"]'));
+        return candidates.some(el => (el.textContent || '').toLowerCase().includes('ver detalle'));
+    }, { timeout });
+
     const action = await page.evaluate(() => {
-        const rows = Array.from(globalThis.document.querySelectorAll('table tbody tr'));
-        const firstRow = rows.find(row => row.querySelectorAll('td').length > 0);
+        const mapRow = (row) => {
+            const cells = Array.from(row.querySelectorAll('td,[role="gridcell"]'))
+                .map(cell => (cell.textContent || '').trim())
+                .filter(Boolean);
+            return {
+                name: cells[0] || null,
+                username: cells[1] || null,
+                totalHours: cells[2] || null,
+                team: cells[3] || null
+            };
+        };
 
-        if (!firstRow) {
-            return { clicked: false, href: null };
-        }
-
-        const candidates = Array.from(firstRow.querySelectorAll('a,button,[role="button"],span,div'));
+        const candidates = Array.from(globalThis.document.querySelectorAll('a,button,[role="button"]'));
         const target = candidates.find(el => (el.textContent || '').toLowerCase().includes('ver detalle'));
 
         if (!target) {
-            return { clicked: false, href: null };
+            return { clicked: false, href: null, rowData: null };
         }
+
+        const row = target.closest('tr,[role="row"]');
+        const rowData = row ? mapRow(row) : null;
 
         const link = target.closest('a');
         const href = link ? link.getAttribute('href') : null;
 
         if (!href) {
-            const clickable = target.closest('a,button,[role="button"]') || target;
-            clickable.click();
+            target.click();
         }
 
-        return { clicked: true, href };
+        return { clicked: true, href, rowData };
     });
 
     if (!action.clicked) {
@@ -194,7 +233,7 @@ async function openFirstReportDetail(page) {
     if (action.href) {
         const detailUrl = new URL(action.href, KRONOS_BASE_URL).toString();
         await page.goto(detailUrl, { waitUntil: 'networkidle2' });
-        return;
+        return action.rowData;
     }
 
     await Promise.race([
@@ -211,6 +250,8 @@ async function openFirstReportDetail(page) {
             return markers.some(marker => text.includes(marker));
         }, { timeout: 10000 })
     ]).catch(() => null);
+
+    return action.rowData;
 }
 
 async function extractUserFromDetail(page, fallback) {
@@ -419,18 +460,24 @@ async function getWeeklyReportsFirstPerson(username, password) {
 
         await loginToKronos(page, username, password);
         await clickSidebarReports(page);
-        const firstRow = await extractFirstReportRow(page);
+        let firstRow = { name: null, username: null, totalHours: null, team: null };
+        try {
+            firstRow = await extractFirstReportRow(page, 8000);
+        } catch (rowError) {
+            console.warn('[Kronos] No se pudo leer la primera fila por selector. Continuando con Ver detalle...', rowError.message);
+        }
 
-        await openFirstReportDetail(page);
-        const detail = await extractUserFromDetail(page, firstRow);
+        const clickedRowData = await openFirstReportDetail(page, 45000);
+        const fallback = mergeRowData(clickedRowData || {}, firstRow);
+        const detail = await extractUserFromDetail(page, fallback);
 
         return {
             success: true,
-            firstName: detail.name || firstRow.name,
-            firstUsername: detail.username || firstRow.username,
-            firstTotalHours: detail.totalHours || firstRow.totalHours,
-            firstTeam: detail.team || firstRow.team,
-            detailLabel: detail.detailLabel || firstRow.name
+            firstName: detail.name || fallback.name,
+            firstUsername: detail.username || fallback.username,
+            firstTotalHours: detail.totalHours || fallback.totalHours,
+            firstTeam: detail.team || fallback.team,
+            detailLabel: detail.detailLabel || fallback.name
         };
     } catch (error) {
         let context = '';
