@@ -271,7 +271,7 @@ const handleSemanalCommand = async ({ ack, command, respond }) => {
 
         await respond({
             response_type: 'ephemeral',
-            text: '👀 Sí, estoy viendo Reportes en Kronos...'
+            text: '👀 Sí, estoy viendo Reportes en Kronos... (`semanal-v2`)'
         });
 
         const result = await kronosService.getWeeklyReportsFirstPerson(user.kronos_user, user.kronos_password);

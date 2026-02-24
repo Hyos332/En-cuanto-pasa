@@ -64,12 +64,72 @@ async function clickSidebarReports(page) {
         return true;
     });
 
-    if (!clicked) {
-        await page.goto(`${KRONOS_BASE_URL}reportes`, { waitUntil: 'networkidle2' });
+    if (clicked) {
+        await waitForReportsView(page, 12000).catch(() => null);
+        if (await isReportsView(page)) {
+            return;
+        }
     }
+
+    const candidateRoutes = [
+        'reportes',
+        'admin/reportes',
+        'administracion/reportes'
+    ];
+
+    for (const route of candidateRoutes) {
+        await page.goto(`${KRONOS_BASE_URL}${route}`, { waitUntil: 'networkidle2' });
+        await waitForReportsView(page, 8000).catch(() => null);
+        if (await isReportsView(page)) {
+            return;
+        }
+    }
+
+    throw new Error('No se pudo abrir la pantalla de Reportes tras login.');
+}
+
+async function waitForReportsView(page, timeout = 20000) {
+    await page.waitForFunction(() => {
+        const text = (globalThis.document.body?.innerText || '').toLowerCase();
+        const hasSummary = text.includes('resumen de horas de la semana');
+        const hasDetail = text.includes('ver detalle');
+        const hasColumns =
+            text.includes('nombre') &&
+            text.includes('usuario') &&
+            text.includes('total de horas');
+
+        return hasDetail || (hasSummary && hasColumns);
+    }, { timeout });
+}
+
+async function isReportsView(page) {
+    return page.evaluate(() => {
+        const text = (globalThis.document.body?.innerText || '').toLowerCase();
+        const hasSummary = text.includes('resumen de horas de la semana');
+        const hasDetail = text.includes('ver detalle');
+        const hasColumns =
+            text.includes('nombre') &&
+            text.includes('usuario') &&
+            text.includes('total de horas');
+
+        return hasDetail || (hasSummary && hasColumns);
+    });
+}
+
+async function getPageDebugInfo(page) {
+    return page.evaluate(() => {
+        const text = (globalThis.document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+        return {
+            url: globalThis.location.href,
+            title: globalThis.document.title,
+            snippet: text.slice(0, 280)
+        };
+    });
 }
 
 async function extractFirstReportRow(page) {
+    await waitForReportsView(page, 20000);
+
     await page.waitForFunction(() => {
         const rows = Array.from(globalThis.document.querySelectorAll('table tbody tr'));
         return rows.some(row => row.querySelectorAll('td').length > 0);
@@ -373,8 +433,22 @@ async function getWeeklyReportsFirstPerson(username, password) {
             detailLabel: detail.detailLabel || firstRow.name
         };
     } catch (error) {
+        let context = '';
+        try {
+            if (browser) {
+                const pages = await browser.pages();
+                const activePage = pages[0];
+                if (activePage) {
+                    const info = await getPageDebugInfo(activePage);
+                    context = ` [URL:${info.url}] [TITLE:${info.title}] [SNIPPET:${info.snippet}]`;
+                }
+            }
+        } catch (ctxError) {
+            context = '';
+        }
+
         console.error('Kronos Weekly Report Error:', error);
-        return { success: false, message: `Error: ${error.message}` };
+        return { success: false, message: `Error: ${error.message}${context}` };
     } finally {
         if (browser) await browser.close();
     }
