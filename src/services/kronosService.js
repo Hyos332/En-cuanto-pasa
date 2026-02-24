@@ -137,6 +137,57 @@ function mergeRowData(primary = {}, secondary = {}) {
     };
 }
 
+function normalizeIdentity(value) {
+    return (value || '')
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+async function extractVisibleReportRows(page) {
+    const rows = await page.evaluate(() => {
+        const toRow = (cells) => ({
+            name: cells[0] || null,
+            username: cells[1] || null,
+            totalHours: cells[2] || null,
+            team: cells[3] || null
+        });
+
+        const collected = [];
+
+        const tableRows = Array.from(globalThis.document.querySelectorAll('table tbody tr'))
+            .filter(row => row.querySelectorAll('td').length > 0);
+        tableRows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent || '').trim());
+            collected.push(toRow(cells));
+        });
+
+        const gridRows = Array.from(globalThis.document.querySelectorAll('[role="row"]'))
+            .filter(row => row.querySelectorAll('[role="gridcell"]').length > 0);
+        gridRows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('[role="gridcell"]')).map(cell => (cell.textContent || '').trim());
+            collected.push(toRow(cells));
+        });
+
+        return collected.filter(row => row.name || row.username);
+    });
+
+    const dedup = [];
+    const seen = new Set();
+    rows.forEach(row => {
+        const key = `${normalizeIdentity(row.username)}|${normalizeIdentity(row.name)}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            dedup.push(row);
+        }
+    });
+
+    return dedup;
+}
+
 async function extractFirstReportRow(page, timeout = 8000) {
     await waitForReportsView(page, timeout + 4000);
 
@@ -320,50 +371,20 @@ async function extractReportUserByUsername(page, targetUsername, timeout = 45000
         return rows.some(row => normalize(row.username) === target && Boolean(row.totalHours));
     }, { timeout }, normalizedTarget);
 
-    const result = await page.evaluate((target) => {
-        const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim().toLowerCase();
-        const toRow = (cells) => ({
-            name: cells[0] || null,
-            username: cells[1] || null,
-            totalHours: cells[2] || null,
-            team: cells[3] || null
-        });
+    const rows = await extractVisibleReportRows(page);
+    const found = rows.find(row => normalizeIdentity(row.username) === normalizedTarget) || null;
+    const visibleUsers = rows.map(row => row.username).filter(Boolean).slice(0, 15);
 
-        const rows = [];
-
-        const tableRows = Array.from(globalThis.document.querySelectorAll('table tbody tr'))
-            .filter(row => row.querySelectorAll('td').length > 0);
-        tableRows.forEach(row => {
-            const cells = Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent || '').trim());
-            rows.push(toRow(cells));
-        });
-
-        const gridRows = Array.from(globalThis.document.querySelectorAll('[role="row"]'))
-            .filter(row => row.querySelectorAll('[role="gridcell"]').length > 0);
-        gridRows.forEach(row => {
-            const cells = Array.from(row.querySelectorAll('[role="gridcell"]')).map(cell => (cell.textContent || '').trim());
-            rows.push(toRow(cells));
-        });
-
-        const found = rows.find(row => normalize(row.username) === target) || null;
-        const visibleUsers = rows
-            .map(row => row.username)
-            .filter(Boolean)
-            .slice(0, 15);
-
-        return { found, visibleUsers };
-    }, normalizedTarget);
-
-    if (!result.found) {
-        const listed = result.visibleUsers.length > 0 ? result.visibleUsers.join(', ') : 'sin usuarios visibles';
+    if (!found) {
+        const listed = visibleUsers.length > 0 ? visibleUsers.join(', ') : 'sin usuarios visibles';
         throw new Error(`No encontré al usuario ${targetUsername} en Reportes. Usuarios visibles: ${listed}`);
     }
 
-    if (!result.found.totalHours) {
+    if (!found.totalHours) {
         throw new Error(`Encontré al usuario ${targetUsername}, pero no pude leer su total de horas.`);
     }
 
-    return result.found;
+    return found;
 }
 
 async function stopTimer(username, password) {
@@ -626,4 +647,86 @@ async function getWeeklyReportUserHours(username, password, targetUsername) {
     }
 }
 
-module.exports = { stopTimer, startTimer, getWeeklyReportsFirstPerson, getWeeklyReportUserHours };
+async function getWeeklyReportPeopleHours(username, password, targetPeople) {
+    let browser;
+
+    try {
+        const targets = Array.isArray(targetPeople) ? targetPeople.filter(Boolean) : [];
+        if (targets.length === 0) {
+            throw new Error('No se enviaron personas objetivo para consultar en Reportes.');
+        }
+
+        const launched = await launchKronosPage();
+        browser = launched.browser;
+        const page = launched.page;
+
+        console.log(`[Kronos] Attempting weekly report multi-lookup for user: ${username}. Targets: ${targets.length}`);
+
+        await loginToKronos(page, username, password);
+        await clickSidebarReports(page);
+        await waitForReportsView(page, 20000);
+        await page.waitForFunction(() => {
+            const tableRows = Array.from(globalThis.document.querySelectorAll('table tbody tr'))
+                .filter(row => row.querySelectorAll('td').length > 0);
+            const gridRows = Array.from(globalThis.document.querySelectorAll('[role="row"]'))
+                .filter(row => row.querySelectorAll('[role="gridcell"]').length > 0);
+            return tableRows.length > 0 || gridRows.length > 0;
+        }, { timeout: 30000 });
+
+        const rows = await extractVisibleReportRows(page);
+        const results = targets.map(target => {
+            const normalizedTarget = normalizeIdentity(target);
+            const found = rows.find(row =>
+                normalizeIdentity(row.name) === normalizedTarget ||
+                normalizeIdentity(row.username) === normalizedTarget
+            );
+
+            if (!found) {
+                return {
+                    target,
+                    found: false,
+                    name: null,
+                    username: null,
+                    totalHours: null,
+                    team: null
+                };
+            }
+
+            return {
+                target,
+                found: true,
+                name: found.name,
+                username: found.username,
+                totalHours: found.totalHours,
+                team: found.team
+            };
+        });
+
+        return {
+            success: true,
+            results,
+            visibleRows: rows.length
+        };
+    } catch (error) {
+        let context = '';
+        try {
+            if (browser) {
+                const pages = await browser.pages();
+                const activePage = pages[0];
+                if (activePage) {
+                    const info = await getPageDebugInfo(activePage);
+                    context = ` [URL:${info.url}] [TITLE:${info.title}] [SNIPPET:${info.snippet}]`;
+                }
+            }
+        } catch (ctxError) {
+            context = '';
+        }
+
+        console.error('Kronos Weekly Multi Lookup Error:', error);
+        return { success: false, message: `Error: ${error.message}${context}` };
+    } finally {
+        if (browser) await browser.close();
+    }
+}
+
+module.exports = { stopTimer, startTimer, getWeeklyReportsFirstPerson, getWeeklyReportUserHours, getWeeklyReportPeopleHours };

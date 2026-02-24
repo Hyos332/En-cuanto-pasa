@@ -59,6 +59,19 @@ async function getSlackToken() {
 
 const tokenStore = new Map();
 
+const SEMANAL_TARGET_PEOPLE = [
+    'Diego Moys',
+    'Bryan Baquedano',
+    'Carlos Alvarado',
+    'Josué Merino',
+    'Diego Jimenez',
+    'Angel Romero',
+    'Marco Figueroa',
+    'Luis Felipe Hoyos',
+    'Kevin Ponce',
+    'Katerine Rafael'
+];
+
 function getAllowedSemanalUsernames() {
     const configured = process.env.SEMANAL_ALLOWED_USERNAMES || 'diego.moys';
     return configured
@@ -271,13 +284,13 @@ const handleSemanalCommand = async ({ ack, command, respond }) => {
 
         await respond({
             response_type: 'ephemeral',
-            text: '👀 Buscando `angel.romero` en Reportes... (`semanal-v3`)'
+            text: `👀 Consultando ${SEMANAL_TARGET_PEOPLE.length} personas en Reportes... (\`semanal-v4\`)`
         });
 
-        const result = await kronosService.getWeeklyReportUserHours(
+        const result = await kronosService.getWeeklyReportPeopleHours(
             user.kronos_user,
             user.kronos_password,
-            'angel.romero'
+            SEMANAL_TARGET_PEOPLE
         );
         if (!result.success) {
             await respond({
@@ -287,9 +300,17 @@ const handleSemanalCommand = async ({ ack, command, respond }) => {
             return;
         }
 
+        const lines = result.results.map(entry => {
+            if (!entry.found) {
+                return `• ${entry.target}: \`No encontrado\``;
+            }
+
+            return `• ${entry.target}: \`${entry.totalHours || 'N/D'}\``;
+        });
+
         await respond({
             response_type: 'ephemeral',
-            text: `✅ Reporte semanal encontrado.\n• Nombre: *${result.name || 'N/D'}*\n• Usuario: \`${result.username || 'angel.romero'}\`\n• Total horas: \`${result.totalHours || 'N/D'}\`\n• Equipo: \`${result.team || 'N/D'}\``
+            text: `✅ Consulta semanal completada.\n${lines.join('\n')}\n\nRegistros visibles en la tabla: \`${result.visibleRows}\``
         });
     } catch (error) {
         console.error('Error in /semanal command:', error);
