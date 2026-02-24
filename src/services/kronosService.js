@@ -17,8 +17,7 @@ async function launchKronosPage() {
 function buildFindElementByText(page) {
     return async (selector, text) => {
         return page.evaluateHandle((selectorValue, textValue) => {
-            // eslint-disable-next-line no-undef
-            const elements = [...document.querySelectorAll(selectorValue)];
+            const elements = [...globalThis.document.querySelectorAll(selectorValue)];
             return elements.find(el => el.innerText.includes(textValue));
         }, selector, text);
     };
@@ -53,7 +52,7 @@ async function loginToKronos(page, username, password) {
 
 async function clickSidebarReports(page) {
     const clicked = await page.evaluate(() => {
-        const elements = Array.from(document.querySelectorAll('a,button,[role="button"],span,div'));
+        const elements = Array.from(globalThis.document.querySelectorAll('a,button,[role="button"],span,div'));
         const target = elements.find(el => (el.textContent || '').trim() === 'Reportes');
 
         if (!target) {
@@ -72,14 +71,12 @@ async function clickSidebarReports(page) {
 
 async function extractFirstReportName(page) {
     await page.waitForFunction(() => {
-        // eslint-disable-next-line no-undef
-        const rows = Array.from(document.querySelectorAll('table tbody tr'));
+        const rows = Array.from(globalThis.document.querySelectorAll('table tbody tr'));
         return rows.some(row => row.querySelectorAll('td').length > 0);
     }, { timeout: 20000 });
 
     const firstName = await page.evaluate(() => {
-        // eslint-disable-next-line no-undef
-        const rows = Array.from(document.querySelectorAll('table tbody tr'));
+        const rows = Array.from(globalThis.document.querySelectorAll('table tbody tr'));
         const firstRow = rows.find(row => row.querySelectorAll('td').length > 0);
         if (!firstRow) {
             return null;
@@ -105,7 +102,7 @@ async function stopTimer(username, password) {
 
         const findElementByText = async (selector, text) => {
             return page.evaluateHandle((selector, text) => {
-                const elements = [...document.querySelectorAll(selector)];
+                const elements = [...globalThis.document.querySelectorAll(selector)];
                 return elements.find(el => el.innerText.includes(text));
             }, selector, text);
         };
@@ -194,8 +191,7 @@ async function startTimer(username, password) {
         // Función auxiliar local
         const findElementByText = async (selector, text) => {
             return page.evaluateHandle((selector, text) => {
-                // eslint-disable-next-line no-undef
-                const elements = [...document.querySelectorAll(selector)];
+                const elements = [...globalThis.document.querySelectorAll(selector)];
                 return elements.find(el => el.innerText.includes(text));
             }, selector, text);
         };
