@@ -5,7 +5,7 @@ const path = require('path');
 const installationStore = require('./src/utils/installationStore');
 const { handleBusCommand, handleRealTimeBusCommand } = require('./src/handlers/busHandler');
 const { handleRefreshSchedule, handleRefreshRealTime } = require('./src/handlers/actionHandler');
-const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, handleStopCommand, initSchedules, reloadUserSchedule, sendScheduleConfirmation, tokenStore } = require('./src/handlers/kronosHandler');
+const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, handleStopCommand, handleSemanalCommand, initSchedules, reloadUserSchedule, sendScheduleConfirmation, tokenStore } = require('./src/handlers/kronosHandler');
 const axios = require('axios');
 const config = require('./src/config');
 const db = require('./src/db'); 
@@ -160,6 +160,7 @@ if (typeof handleStopCommand !== 'function') {
 }
 
 app.command('/stop', handleStopCommand);
+app.command('/semanal', handleSemanalCommand);
 // app.command('/horario', handleScheduleCommand); // Legacy
 app.command('/programar', handleScheduleCommand);
 

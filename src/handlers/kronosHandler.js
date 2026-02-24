@@ -59,6 +59,33 @@ async function getSlackToken() {
 
 const tokenStore = new Map();
 
+function getAllowedSemanalUsernames() {
+    const configured = process.env.SEMANAL_ALLOWED_USERNAMES || 'diego.moys';
+    return configured
+        .split(',')
+        .map(value => value.trim().toLowerCase())
+        .filter(Boolean);
+}
+
+function getAllowedSemanalUserIds() {
+    const configured = process.env.SEMANAL_ALLOWED_USER_IDS || '';
+    return configured
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean);
+}
+
+function isSemanalAllowed(command) {
+    const allowedUsernames = getAllowedSemanalUsernames();
+    const allowedUserIds = getAllowedSemanalUserIds();
+
+    const username = (command.user_name || '').trim().toLowerCase();
+    const isAllowedByUsername = allowedUsernames.includes(username);
+    const isAllowedById = allowedUserIds.includes(command.user_id);
+
+    return isAllowedByUsername || isAllowedById;
+}
+
 const handleLoginCommand = async ({ ack, command, client }) => {
     
     await ack();
@@ -221,6 +248,54 @@ const handleStopCommand = async ({ ack, command, client }) => {
     }
 };
 
+const handleSemanalCommand = async ({ ack, command, respond }) => {
+    await ack();
+
+    if (!isSemanalAllowed(command)) {
+        await respond({
+            response_type: 'ephemeral',
+            text: '⛔ No tienes permisos para ejecutar `/semanal`.'
+        });
+        return;
+    }
+
+    try {
+        const user = await db.getUser(command.user_id);
+        if (!user || !user.kronos_user || !user.kronos_password) {
+            await respond({
+                response_type: 'ephemeral',
+                text: '⚠️ No encontré credenciales de Kronos. Ejecuta `/login usuario contraseña` primero.'
+            });
+            return;
+        }
+
+        await respond({
+            response_type: 'ephemeral',
+            text: '👀 Sí, estoy viendo Reportes en Kronos...'
+        });
+
+        const result = await kronosService.getWeeklyReportsFirstPerson(user.kronos_user, user.kronos_password);
+        if (!result.success) {
+            await respond({
+                response_type: 'ephemeral',
+                text: `❌ No pude leer Reportes: ${result.message}`
+            });
+            return;
+        }
+
+        await respond({
+            response_type: 'ephemeral',
+            text: `✅ Reportes detectado. Primera persona de la tabla: *${result.firstName}*`
+        });
+    } catch (error) {
+        console.error('Error in /semanal command:', error);
+        await respond({
+            response_type: 'ephemeral',
+            text: `❌ Error ejecutando /semanal: ${error.message}`
+        });
+    }
+};
+
 const handleScheduleCommand = async ({ ack, command, client }) => {
     await ack();
     const time = command.text.trim();
@@ -364,6 +439,7 @@ module.exports = {
     handlePanelCommand,
     handleScheduleCommand,
     handleStopCommand,
+    handleSemanalCommand,
     initSchedules,
     reloadUserSchedule,
     sendScheduleConfirmation, 

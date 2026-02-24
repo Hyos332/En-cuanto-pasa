@@ -1,16 +1,105 @@
 const puppeteer = require('puppeteer');
 
 const KRONOS_URL = 'https://kronos.ctdesarrollo-sdr.org/mi-tiempo-hoy';
+const KRONOS_BASE_URL = 'https://kronos.ctdesarrollo-sdr.org/';
+
+async function launchKronosPage() {
+    const browser = await puppeteer.launch({
+        headless: true,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    const page = await browser.newPage();
+    return { browser, page };
+}
+
+function buildFindElementByText(page) {
+    return async (selector, text) => {
+        return page.evaluateHandle((selectorValue, textValue) => {
+            // eslint-disable-next-line no-undef
+            const elements = [...document.querySelectorAll(selectorValue)];
+            return elements.find(el => el.innerText.includes(textValue));
+        }, selector, text);
+    };
+}
+
+async function loginToKronos(page, username, password) {
+    const findElementByText = buildFindElementByText(page);
+
+    await page.goto(KRONOS_BASE_URL, { waitUntil: 'networkidle2' });
+    await page.waitForSelector('input[name="user"]');
+
+    await page.type('input[name="user"]', username);
+    await page.type('input[name="password"]', password);
+
+    let loginButton = await page.$('button[type="submit"]');
+    if (!loginButton) {
+        const buttonHandle = await findElementByText('button', 'Acceder');
+        if (buttonHandle.asElement()) {
+            loginButton = buttonHandle.asElement();
+        }
+    }
+
+    if (!loginButton) {
+        throw new Error('No se encontró el botón de acceso en Kronos.');
+    }
+
+    await Promise.all([
+        page.waitForNavigation({ waitUntil: 'networkidle2' }),
+        loginButton.click()
+    ]);
+}
+
+async function clickSidebarReports(page) {
+    const clicked = await page.evaluate(() => {
+        const elements = Array.from(document.querySelectorAll('a,button,[role="button"],span,div'));
+        const target = elements.find(el => (el.textContent || '').trim() === 'Reportes');
+
+        if (!target) {
+            return false;
+        }
+
+        const clickable = target.closest('a,button,[role="button"]') || target;
+        clickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        return true;
+    });
+
+    if (!clicked) {
+        await page.goto(`${KRONOS_BASE_URL}reportes`, { waitUntil: 'networkidle2' });
+    }
+}
+
+async function extractFirstReportName(page) {
+    await page.waitForFunction(() => {
+        const rows = Array.from(document.querySelectorAll('table tbody tr'));
+        return rows.some(row => row.querySelectorAll('td').length > 0);
+    }, { timeout: 20000 });
+
+    const firstName = await page.evaluate(() => {
+        const rows = Array.from(document.querySelectorAll('table tbody tr'));
+        const firstRow = rows.find(row => row.querySelectorAll('td').length > 0);
+        if (!firstRow) {
+            return null;
+        }
+
+        const firstCell = firstRow.querySelector('td');
+        return firstCell ? firstCell.textContent.trim() : null;
+    });
+
+    if (!firstName) {
+        throw new Error('No se pudo leer la primera persona del reporte.');
+    }
+
+    return firstName;
+}
 
 async function stopTimer(username, password) {
     let browser;
     try {
-        browser = await puppeteer.launch({
-            headless: true,
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        const page = await browser.newPage();
+        const launched = await launchKronosPage();
+        browser = launched.browser;
+        const page = launched.page;
 
         // Función auxiliar para buscar elementos por texto (reemplazo de $x)
         const findElementByText = async (selector, text) => {
@@ -99,12 +188,9 @@ async function stopTimer(username, password) {
 async function startTimer(username, password) {
     let browser;
     try {
-        browser = await puppeteer.launch({
-            headless: true,
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        const page = await browser.newPage();
+        const launched = await launchKronosPage();
+        browser = launched.browser;
+        const page = launched.page;
 
         // Función auxiliar local
         const findElementByText = async (selector, text) => {
@@ -176,4 +262,27 @@ async function startTimer(username, password) {
     }
 }
 
-module.exports = { stopTimer, startTimer };
+async function getWeeklyReportsFirstPerson(username, password) {
+    let browser;
+
+    try {
+        const launched = await launchKronosPage();
+        browser = launched.browser;
+        const page = launched.page;
+
+        console.log(`[Kronos] Attempting weekly report extraction for user: ${username}`);
+
+        await loginToKronos(page, username, password);
+        await clickSidebarReports(page);
+
+        const firstName = await extractFirstReportName(page);
+        return { success: true, firstName };
+    } catch (error) {
+        console.error('Kronos Weekly Report Error:', error);
+        return { success: false, message: `Error: ${error.message}` };
+    } finally {
+        if (browser) await browser.close();
+    }
+}
+
+module.exports = { stopTimer, startTimer, getWeeklyReportsFirstPerson };
