@@ -6,7 +6,7 @@ WORKDIR /app
 # - python3, make, g++: Para compilar sqlite3
 # - chromium, nss, freetype, etc: Para que Puppeteer funcione en Alpine
 RUN apk add --no-cache \
-    python3 make g++ \
+    python3 py3-setuptools make g++ \
     chromium \
     nss \
     freetype \

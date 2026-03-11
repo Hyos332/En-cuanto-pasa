@@ -41,6 +41,9 @@
     "jest": "^29.0.0",
     "nodemon": "^3.0.1"
   },
+  "overrides": {
+    "node-gyp": "^10.2.0"
+  },
   "engines": {
     "node": ">=14.0.0"
   },
