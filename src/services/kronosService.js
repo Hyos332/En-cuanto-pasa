@@ -3,6 +3,10 @@ const puppeteer = require('puppeteer');
 const KRONOS_URL = 'https://kronos.ctdesarrollo-sdr.org/mi-tiempo-hoy';
 const KRONOS_BASE_URL = 'https://kronos.ctdesarrollo-sdr.org/';
 
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function launchKronosPage() {
     const browser = await puppeteer.launch({
         headless: true,
@@ -186,6 +190,81 @@ async function extractVisibleReportRows(page) {
     });
 
     return dedup;
+}
+
+async function setReportsDate(page, reportDate) {
+    if (!reportDate || !reportDate.displayDate || !reportDate.isoDate) {
+        return { applied: false };
+    }
+
+    const applyResult = await page.evaluate((displayDate, isoDate) => {
+        const normalize = (value) => (value || '').toString().toLowerCase();
+        const hasDateValue = (value) => {
+            const v = (value || '').trim();
+            return /^\d{2}\/\d{2}\/\d{4}$/.test(v) || /^\d{4}-\d{2}-\d{2}$/.test(v);
+        };
+
+        const inputs = Array.from(globalThis.document.querySelectorAll('input'));
+        const candidates = inputs
+            .map((input) => {
+                const type = normalize(input.type);
+                const id = normalize(input.id);
+                const name = normalize(input.name);
+                const cls = normalize(input.className);
+                const placeholder = normalize(input.placeholder);
+                const aria = normalize(input.getAttribute('aria-label'));
+                const currentValue = (input.value || '').trim();
+
+                let score = 0;
+                if (type === 'date') score += 10;
+                if (hasDateValue(currentValue)) score += 7;
+                if (placeholder.includes('fecha') || aria.includes('fecha')) score += 6;
+                if (placeholder.includes('date') || aria.includes('date')) score += 5;
+                if (id.includes('date') || name.includes('date') || cls.includes('date')) score += 3;
+                if (id.includes('fecha') || name.includes('fecha') || cls.includes('fecha')) score += 3;
+                if (placeholder.includes('buscar')) score -= 10;
+                if (name.includes('search') || id.includes('search')) score -= 8;
+
+                return { input, score, type };
+            })
+            .filter(item => item.score > 0)
+            .sort((a, b) => b.score - a.score);
+
+        const picked = candidates[0];
+        if (!picked) {
+            return {
+                applied: false,
+                reason: 'No se encontró un input de fecha en Reportes.'
+            };
+        }
+
+        const input = picked.input;
+        const valueToSet = picked.type === 'date' ? isoDate : displayDate;
+
+        const descriptor = Object.getOwnPropertyDescriptor(globalThis.HTMLInputElement.prototype, 'value');
+        if (descriptor && typeof descriptor.set === 'function') {
+            descriptor.set.call(input, valueToSet);
+        } else {
+            input.value = valueToSet;
+        }
+
+        input.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+        input.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
+        input.dispatchEvent(new globalThis.Event('blur', { bubbles: true }));
+
+        return {
+            applied: true,
+            valueSet: valueToSet,
+            type: picked.type
+        };
+    }, reportDate.displayDate, reportDate.isoDate);
+
+    if (!applyResult.applied) {
+        throw new Error(applyResult.reason || 'No se pudo establecer la fecha en Reportes.');
+    }
+
+    await delay(1500);
+    return applyResult;
 }
 
 async function extractFirstReportRow(page, timeout = 8000) {
@@ -647,7 +726,7 @@ async function getWeeklyReportUserHours(username, password, targetUsername) {
     }
 }
 
-async function getWeeklyReportPeopleHours(username, password, targetPeople) {
+async function getWeeklyReportPeopleHours(username, password, targetPeople, options = {}) {
     let browser;
 
     try {
@@ -664,6 +743,10 @@ async function getWeeklyReportPeopleHours(username, password, targetPeople) {
 
         await loginToKronos(page, username, password);
         await clickSidebarReports(page);
+        const dateInfo = options.reportDate || null;
+        if (dateInfo) {
+            await setReportsDate(page, dateInfo);
+        }
         await waitForReportsView(page, 20000);
         await page.waitForFunction(() => {
             const tableRows = Array.from(globalThis.document.querySelectorAll('table tbody tr'))
@@ -705,7 +788,8 @@ async function getWeeklyReportPeopleHours(username, password, targetPeople) {
         return {
             success: true,
             results,
-            visibleRows: rows.length
+            visibleRows: rows.length,
+            usedDate: dateInfo ? dateInfo.displayDate : null
         };
     } catch (error) {
         let context = '';

@@ -72,6 +72,82 @@ const SEMANAL_TARGET_PEOPLE = [
     'Katerine Rafael'
 ];
 
+function formatDateParts(dateUtc) {
+    const day = String(dateUtc.getUTCDate()).padStart(2, '0');
+    const month = String(dateUtc.getUTCMonth() + 1).padStart(2, '0');
+    const year = dateUtc.getUTCFullYear();
+
+    return {
+        displayDate: `${day}/${month}/${year}`,
+        isoDate: `${year}-${month}-${day}`
+    };
+}
+
+function getCurrentMadridDateUtc() {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Madrid',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).formatToParts(now);
+
+    const values = {};
+    parts.forEach(part => {
+        if (part.type !== 'literal') {
+            values[part.type] = part.value;
+        }
+    });
+
+    return new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day), 12, 0, 0));
+}
+
+function getFridayOfCurrentMadridWeek() {
+    const madridDate = getCurrentMadridDateUtc();
+    const weekday = madridDate.getUTCDay(); // 0=domingo
+    const weekdayIso = weekday === 0 ? 7 : weekday; // 1=lunes..7=domingo
+    const diffToFriday = 5 - weekdayIso; // viernes=5
+
+    const friday = new Date(madridDate);
+    friday.setUTCDate(friday.getUTCDate() + diffToFriday);
+
+    return formatDateParts(friday);
+}
+
+function parseSemanalDate(rawText) {
+    const value = (rawText || '').trim();
+    if (!value) {
+        return { ok: true, date: getFridayOfCurrentMadridWeek() };
+    }
+
+    const matchDisplay = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (matchDisplay) {
+        const day = Number(matchDisplay[1]);
+        const month = Number(matchDisplay[2]);
+        const year = Number(matchDisplay[3]);
+        const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+        if (date.getUTCFullYear() === year && (date.getUTCMonth() + 1) === month && date.getUTCDate() === day) {
+            return { ok: true, date: formatDateParts(date) };
+        }
+    }
+
+    const matchIso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (matchIso) {
+        const year = Number(matchIso[1]);
+        const month = Number(matchIso[2]);
+        const day = Number(matchIso[3]);
+        const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+        if (date.getUTCFullYear() === year && (date.getUTCMonth() + 1) === month && date.getUTCDate() === day) {
+            return { ok: true, date: formatDateParts(date) };
+        }
+    }
+
+    return {
+        ok: false,
+        error: 'Formato de fecha inválido. Usa `/semanal` o `/semanal DD/MM/AAAA`.'
+    };
+}
+
 function getAllowedSemanalUsernames() {
     const configured = process.env.SEMANAL_ALLOWED_USERNAMES || 'diego.moys';
     return configured
@@ -273,6 +349,17 @@ const handleSemanalCommand = async ({ ack, command, respond }) => {
     }
 
     try {
+        const parsedDate = parseSemanalDate(command.text);
+        if (!parsedDate.ok) {
+            await respond({
+                response_type: 'ephemeral',
+                text: `❌ ${parsedDate.error}`
+            });
+            return;
+        }
+
+        const reportDate = parsedDate.date;
+
         const user = await db.getUser(command.user_id);
         if (!user || !user.kronos_user || !user.kronos_password) {
             await respond({
@@ -284,13 +371,14 @@ const handleSemanalCommand = async ({ ack, command, respond }) => {
 
         await respond({
             response_type: 'ephemeral',
-            text: `👀 Consultando ${SEMANAL_TARGET_PEOPLE.length} personas en Reportes... (\`semanal-v4\`)`
+            text: `👀 Consultando ${SEMANAL_TARGET_PEOPLE.length} personas en Reportes para ${reportDate.displayDate}... (\`semanal-v5\`)`
         });
 
         const result = await kronosService.getWeeklyReportPeopleHours(
             user.kronos_user,
             user.kronos_password,
-            SEMANAL_TARGET_PEOPLE
+            SEMANAL_TARGET_PEOPLE,
+            { reportDate }
         );
         if (!result.success) {
             await respond({
@@ -310,7 +398,7 @@ const handleSemanalCommand = async ({ ack, command, respond }) => {
 
         await respond({
             response_type: 'ephemeral',
-            text: `✅ Consulta semanal completada.\n${lines.join('\n')}\n\nRegistros visibles en la tabla: \`${result.visibleRows}\``
+            text: `✅ Consulta semanal completada (${result.usedDate || reportDate.displayDate}).\n${lines.join('\n')}\n\nRegistros visibles en la tabla: \`${result.visibleRows}\``
         });
     } catch (error) {
         console.error('Error in /semanal command:', error);

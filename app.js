@@ -36,7 +36,7 @@ function normalizeSlots(rawSlots) {
 
     if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
       return null;
-    }
+    }                     
 
     if (!TIME_FORMAT_REGEX.test(startTime) || !TIME_FORMAT_REGEX.test(endTime)) {
       return null;
