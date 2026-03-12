@@ -423,15 +423,26 @@ const handleScheduleCommand = async ({ ack, command, client }) => {
         return;
     }
 
-    await db.saveSchedule(slackId, time);
+    try {
+        
+        await db.saveUserSlots(slackId, []);
+        await db.saveSchedule(slackId, time);
 
-    
-    scheduleJob(slackId, time, 'STOP');
+        
+        clearUserJobs(slackId);
+        scheduleJob(slackId, time, 'STOP');
 
-    await client.chat.postMessage({
-        channel: slackId,
-        text: `⏰ Apagado automático programado a las ${time}`
-    });
+        await client.chat.postMessage({
+            channel: slackId,
+            text: `⏰ Apagado automático programado a las ${time}.`
+        });
+    } catch (e) {
+        console.error('Error in /programar command:', e);
+        await client.chat.postMessage({
+            channel: slackId,
+            text: `❌ No pude programar el apagado automático: ${e.message}`
+        });
+    }
 };
 
 
@@ -494,11 +505,7 @@ function scheduleJob(slackId, time, type, dayOfWeek = null) {
     });
 }
 
-
-const reloadUserSchedule = async (slackId) => {
-    console.log(`🔄 Reloading schedules for ${slackId}...`);
-
-
+function clearUserJobs(slackId) {
     Object.keys(jobs).forEach(key => {
         if (key.startsWith(slackId)) {
             if (jobs[key] && typeof jobs[key].cancel === 'function') {
@@ -507,6 +514,13 @@ const reloadUserSchedule = async (slackId) => {
             delete jobs[key];
         }
     });
+}
+
+
+const reloadUserSchedule = async (slackId) => {
+    console.log(`🔄 Reloading schedules for ${slackId}...`);
+
+    clearUserJobs(slackId);
 
     
     const weeklySchedules = await db.getWeeklySchedule(slackId);
