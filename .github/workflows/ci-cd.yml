@@ -6,13 +6,18 @@ on:
   pull_request:
     branches: [ master ]
 
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     
     strategy:
       matrix:
-        node-version: [18, 20]
+        node-version: [20]
     
     steps:
     - name: Checkout code
@@ -22,9 +27,10 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
+        cache: npm
     
     - name: Install dependencies
-      run: npm install
+      run: npm ci --prefer-offline --no-audit
     
     - name: Run linter
       run: npm run lint
@@ -39,22 +45,43 @@ jobs:
     needs: [test]
     if: github.ref == 'refs/heads/master'
     runs-on: self-hosted
+    timeout-minutes: 20
     steps:
     - name: Deploy Application
       env:
+        PORT: 3005
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
         SLACK_CLIENT_ID: ${{ secrets.SLACK_CLIENT_ID }}
         SLACK_CLIENT_SECRET: ${{ secrets.SLACK_CLIENT_SECRET }}
         SLACK_STATE_SECRET: ${{ secrets.SLACK_STATE_SECRET }}
+        KRONOS_CREDENTIALS_SECRET: ${{ secrets.KRONOS_CREDENTIALS_SECRET }}
+        SEMANAL_ALLOWED_USERNAMES: ${{ vars.SEMANAL_ALLOWED_USERNAMES }}
+        SEMANAL_ALLOWED_USER_IDS: ${{ vars.SEMANAL_ALLOWED_USER_IDS }}
+        SEMANAL_WEEKLY_TARGETS: ${{ vars.SEMANAL_WEEKLY_TARGETS }}
+        SEMANAL_GSHEETS_ENABLED: ${{ vars.SEMANAL_GSHEETS_ENABLED }}
+        SEMANAL_GSHEETS_SPREADSHEET_ID: ${{ secrets.SEMANAL_GSHEETS_SPREADSHEET_ID }}
+        SEMANAL_GSHEETS_SHEET_NAME: ${{ vars.SEMANAL_GSHEETS_SHEET_NAME }}
+        SEMANAL_GSHEETS_CREDENTIALS_BASE64: ${{ secrets.SEMANAL_GSHEETS_CREDENTIALS_BASE64 }}
       run: |
         cd /srv/projects/en-cuanto-pasa
-        git fetch origin master
-        git reset --hard origin/master
-        echo "PORT=3005" > .env
-        echo "SLACK_SIGNING_SECRET=$SLACK_SIGNING_SECRET" >> .env
-        echo "SLACK_CLIENT_ID=$SLACK_CLIENT_ID" >> .env
-        echo "SLACK_CLIENT_SECRET=$SLACK_CLIENT_SECRET" >> .env
-        echo "SLACK_STATE_SECRET=$SLACK_STATE_SECRET" >> .env
-        docker compose down
-        docker rmi en-cuanto-pasa-slack-bot || true
-        docker compose up -d --build --force-recreate
+        git fetch origin master --depth=1
+        git checkout master
+        git pull --ff-only origin master
+        cat > .env <<EOF
+        PORT=${PORT}
+        SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+        SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
+        SLACK_CLIENT_ID=${SLACK_CLIENT_ID}
+        SLACK_CLIENT_SECRET=${SLACK_CLIENT_SECRET}
+        SLACK_STATE_SECRET=${SLACK_STATE_SECRET}
+        KRONOS_CREDENTIALS_SECRET=${KRONOS_CREDENTIALS_SECRET}
+        SEMANAL_ALLOWED_USERNAMES=${SEMANAL_ALLOWED_USERNAMES}
+        SEMANAL_ALLOWED_USER_IDS=${SEMANAL_ALLOWED_USER_IDS}
+        SEMANAL_WEEKLY_TARGETS=${SEMANAL_WEEKLY_TARGETS}
+        SEMANAL_GSHEETS_ENABLED=${SEMANAL_GSHEETS_ENABLED}
+        SEMANAL_GSHEETS_SPREADSHEET_ID=${SEMANAL_GSHEETS_SPREADSHEET_ID}
+        SEMANAL_GSHEETS_SHEET_NAME=${SEMANAL_GSHEETS_SHEET_NAME}
+        SEMANAL_GSHEETS_CREDENTIALS_BASE64=${SEMANAL_GSHEETS_CREDENTIALS_BASE64}
+        EOF
+        docker compose up -d --build --remove-orphans

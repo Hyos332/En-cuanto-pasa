@@ -42,13 +42,19 @@ En-cuanto-pasa/
 - `/login [usuario] [contraseña]` → Guarda acceso a Kronos
 - `/panel` → Configura horario semanal
 - `/stop` → Detiene automatización
-- `/semanal [DD/MM/AAAA|YYYY-MM-DD]` → Consulta horas semanales, calcula diferencia vs objetivo y genera Excel
+- `/semanal [DD/MM/AAAA|YYYY-MM-DD]` → Consulta horas semanales, calcula diferencia vs objetivo, genera Excel y puede sincronizar Google Sheets
 
 ## ⚙️ Variables para /semanal
 - `SEMANAL_ALLOWED_USERNAMES`: usuarios permitidos por username (separados por coma)
 - `SEMANAL_ALLOWED_USER_IDS`: usuarios permitidos por ID de Slack (separados por coma)
 - `SEMANAL_WEEKLY_TARGETS`: objetivos semanales por persona, formato:
   `Nombre=20,Otra Persona=25`
+- `SEMANAL_GSHEETS_ENABLED`: `true/false` para activar sync con Google Sheets
+- `SEMANAL_GSHEETS_SPREADSHEET_ID`: ID del spreadsheet destino
+- `SEMANAL_GSHEETS_SHEET_NAME`: nombre de pestaña destino (por defecto `Horas Extra Bot`)
+- `SEMANAL_GSHEETS_CREDENTIALS_BASE64`: JSON de service account en base64 (recomendado en CI)
+  - También soporta `SEMANAL_GSHEETS_CREDENTIALS_JSON` con el JSON inline.
+  - El spreadsheet debe estar compartido con el `client_email` de la service account (permiso Editor).
 
 ## 🛠️ APIs utilizadas
 - Tiempo real: https://datos.santander.es/api/rest/datasets/control_flotas_estimaciones.json

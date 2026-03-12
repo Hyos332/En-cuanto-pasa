@@ -13,6 +13,7 @@ const {
     buildSemanalMatrix
 } = require('../utils/semanalReport');
 const { buildSemanalWorkbookBuffer } = require('../utils/semanalExcel');
+const { syncSemanalSheet } = require('../services/googleSheetsService');
 
 
 const slackClient = new WebClient();
@@ -484,9 +485,25 @@ const handleSemanalCommand = async ({ ack, command, respond, client }) => {
             excelStatus = '⚠️ No pude enviar el Excel por Slack, pero los datos sí quedaron guardados.';
         }
 
+        let googleSheetsStatus = '🧾 Sync a Google Sheets desactivado.';
+        try {
+            const syncResult = await syncSemanalSheet({
+                matrix,
+                title: 'Horas Extra',
+                reportDate
+            });
+
+            if (syncResult.enabled && syncResult.synced) {
+                googleSheetsStatus = `🧾 Google Sheets actualizado: ${syncResult.url}`;
+            }
+        } catch (sheetError) {
+            console.error('Error sincronizando Google Sheets:', sheetError);
+            googleSheetsStatus = `⚠️ No pude actualizar Google Sheets: ${sheetError.message}`;
+        }
+
         await respond({
             response_type: 'ephemeral',
-            text: `✅ Consulta semanal completada (${result.usedDate || reportDate.displayDate}).\n${lines.join('\n')}\n\nRegistros visibles en la tabla: \`${result.visibleRows}\`\n${excelStatus}`
+            text: `✅ Consulta semanal completada (${result.usedDate || reportDate.displayDate}).\n${lines.join('\n')}\n\nRegistros visibles en la tabla: \`${result.visibleRows}\`\n${excelStatus}\n${googleSheetsStatus}`
         });
     } catch (error) {
         console.error('Error in /semanal command:', error);
