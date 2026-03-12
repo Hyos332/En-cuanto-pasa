@@ -5,6 +5,14 @@ const crypto = require('crypto');
 const { WebClient } = require('@slack/web-api');
 const fs = require('fs').promises;
 const path = require('path');
+const {
+    getSemanalTargets,
+    normalizeIdentity,
+    parseHoursToMinutes,
+    formatMinutesClock,
+    buildSemanalMatrix
+} = require('../utils/semanalReport');
+const { buildSemanalWorkbookBuffer } = require('../utils/semanalExcel');
 
 
 const slackClient = new WebClient();
@@ -59,18 +67,8 @@ async function getSlackToken() {
 
 const tokenStore = new Map();
 
-const SEMANAL_TARGET_PEOPLE = [
-    'Diego Moys',
-    'Bryan Baquedano',
-    'Carlos Alvarado',
-    'Josué Merino',
-    'Diego Jimenez',
-    'Angel Romero',
-    'Marco Figueroa',
-    'Luis Felipe Hoyos',
-    'Kevin Ponce',
-    'Katerine Rafael'
-];
+const SEMANAL_TARGETS = getSemanalTargets();
+const SEMANAL_TARGET_PEOPLE = SEMANAL_TARGETS.map(target => target.name);
 
 function formatDateParts(dateUtc) {
     const day = String(dateUtc.getUTCDate()).padStart(2, '0');
@@ -338,7 +336,7 @@ const handleStopCommand = async ({ ack, command, client }) => {
     }
 };
 
-const handleSemanalCommand = async ({ ack, command, respond }) => {
+const handleSemanalCommand = async ({ ack, command, respond, client }) => {
     await ack();
 
     if (!isSemanalAllowed(command)) {
@@ -372,7 +370,7 @@ const handleSemanalCommand = async ({ ack, command, respond }) => {
 
         await respond({
             response_type: 'ephemeral',
-            text: `👀 Consultando ${SEMANAL_TARGET_PEOPLE.length} personas en Reportes para ${reportDate.displayDate}... (\`semanal-v5\`)`
+            text: `👀 Consultando ${SEMANAL_TARGET_PEOPLE.length} personas en Reportes para ${reportDate.displayDate}... (\`semanal-v6\`)`
         });
 
         const result = await kronosService.getWeeklyReportPeopleHours(
@@ -389,17 +387,106 @@ const handleSemanalCommand = async ({ ack, command, respond }) => {
             return;
         }
 
-        const lines = result.results.map(entry => {
-            if (!entry.found) {
-                return `• ${entry.target}: \`No encontrado\``;
+        const targetMap = new Map(SEMANAL_TARGETS.map(target => [target.personKey, target]));
+        const semanalRows = result.results.map(entry => {
+            const candidateKeys = [
+                normalizeIdentity(entry.target),
+                normalizeIdentity(entry.name),
+                normalizeIdentity(entry.username)
+            ].filter(Boolean);
+
+            const target = candidateKeys
+                .map(key => targetMap.get(key))
+                .find(Boolean) || null;
+
+            const personKey = target?.personKey || candidateKeys[0] || normalizeIdentity(entry.target || entry.name || entry.username || 'desconocido');
+            const personName = target?.name || entry.name || entry.target || entry.username || 'Desconocido';
+            const workedMinutes = parseHoursToMinutes(entry.totalHours);
+            const targetMinutes = target ? target.targetMinutes : null;
+            const deltaMinutes = Number.isFinite(workedMinutes) && Number.isFinite(targetMinutes)
+                ? workedMinutes - targetMinutes
+                : null;
+
+            return {
+                personKey,
+                personName,
+                found: entry.found,
+                workedMinutes,
+                targetMinutes,
+                deltaMinutes,
+                rawTotalHours: entry.totalHours || null
+            };
+        });
+
+        const rowsToPersist = semanalRows
+            .filter(row => Number.isFinite(row.workedMinutes))
+            .map(row => ({
+                person_key: row.personKey,
+                person_name: row.personName,
+                worked_minutes: row.workedMinutes,
+                target_minutes: Number.isFinite(row.targetMinutes) ? row.targetMinutes : null,
+                delta_minutes: Number.isFinite(row.deltaMinutes) ? row.deltaMinutes : null
+            }));
+
+        await db.saveWeeklyBalances(reportDate.isoDate, rowsToPersist);
+
+        const historyRows = await db.getWeeklyBalancesHistory();
+        const matrix = buildSemanalMatrix(historyRows, SEMANAL_TARGETS, {
+            extraWeeks: [reportDate.isoDate]
+        });
+        const totalByPerson = new Map(matrix.people.map(person => [person.personKey, person.totalDeltaMinutes]));
+
+        const lines = semanalRows.map(row => {
+            if (!row.found) {
+                return `• ${row.personName}: \`No encontrado\``;
             }
 
-            return `• ${entry.target}: \`${entry.totalHours || 'N/D'}\``;
+            const workedText = Number.isFinite(row.workedMinutes)
+                ? formatMinutesClock(row.workedMinutes)
+                : (row.rawTotalHours || 'N/D');
+            const targetText = Number.isFinite(row.targetMinutes)
+                ? formatMinutesClock(row.targetMinutes)
+                : 'N/D';
+            const weekDeltaText = Number.isFinite(row.deltaMinutes)
+                ? formatMinutesClock(row.deltaMinutes, { showPlus: true })
+                : 'N/D';
+            const totalDelta = totalByPerson.get(row.personKey);
+            const totalText = Number.isFinite(totalDelta)
+                ? formatMinutesClock(totalDelta, { showPlus: true })
+                : 'N/D';
+
+            return `• ${row.personName}: real \`${workedText}\` | obj \`${targetText}\` | semana \`${weekDeltaText}\` | total \`${totalText}\``;
         });
+
+        let excelStatus = '📎 Excel actualizado y enviado por DM.';
+        try {
+            if (!client || typeof client.files?.uploadV2 !== 'function') {
+                throw new Error('No hay cliente Slack disponible para subir el Excel.');
+            }
+
+            const workbookBuffer = await buildSemanalWorkbookBuffer({
+                matrix,
+                title: 'Horas Extra'
+            });
+
+            const dm = await client.conversations.open({ users: command.user_id });
+            const dmChannelId = dm.channel?.id || command.channel_id;
+
+            await client.files.uploadV2({
+                channel_id: dmChannelId,
+                filename: `horas-extra-${reportDate.isoDate}.xlsx`,
+                title: `Horas Extra ${reportDate.displayDate}`,
+                file: Buffer.from(workbookBuffer),
+                initial_comment: `📊 Excel semanal actualizado al ${reportDate.displayDate}.`
+            });
+        } catch (uploadError) {
+            console.error('Error subiendo Excel semanal:', uploadError);
+            excelStatus = '⚠️ No pude enviar el Excel por Slack, pero los datos sí quedaron guardados.';
+        }
 
         await respond({
             response_type: 'ephemeral',
-            text: `✅ Consulta semanal completada (${result.usedDate || reportDate.displayDate}).\n${lines.join('\n')}\n\nRegistros visibles en la tabla: \`${result.visibleRows}\``
+            text: `✅ Consulta semanal completada (${result.usedDate || reportDate.displayDate}).\n${lines.join('\n')}\n\nRegistros visibles en la tabla: \`${result.visibleRows}\`\n${excelStatus}`
         });
     } catch (error) {
         console.error('Error in /semanal command:', error);

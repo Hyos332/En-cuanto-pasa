@@ -42,6 +42,13 @@ En-cuanto-pasa/
 - `/login [usuario] [contraseña]` → Guarda acceso a Kronos
 - `/panel` → Configura horario semanal
 - `/stop` → Detiene automatización
+- `/semanal [DD/MM/AAAA|YYYY-MM-DD]` → Consulta horas semanales, calcula diferencia vs objetivo y genera Excel
+
+## ⚙️ Variables para /semanal
+- `SEMANAL_ALLOWED_USERNAMES`: usuarios permitidos por username (separados por coma)
+- `SEMANAL_ALLOWED_USER_IDS`: usuarios permitidos por ID de Slack (separados por coma)
+- `SEMANAL_WEEKLY_TARGETS`: objetivos semanales por persona, formato:
+  `Nombre=20,Otra Persona=25`
 
 ## 🛠️ APIs utilizadas
 - Tiempo real: https://datos.santander.es/api/rest/datasets/control_flotas_estimaciones.json

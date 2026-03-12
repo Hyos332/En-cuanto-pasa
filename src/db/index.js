@@ -45,6 +45,16 @@ db.serialize(() => {
         'end_time TEXT,' +
         'is_active INTEGER DEFAULT 1' +
         ')');
+
+    db.run('CREATE TABLE IF NOT EXISTS weekly_balances (' +
+        'report_date_iso TEXT NOT NULL,' +
+        'person_key TEXT NOT NULL,' +
+        'person_name TEXT NOT NULL,' +
+        'worked_minutes INTEGER,' +
+        'target_minutes INTEGER,' +
+        'delta_minutes INTEGER,' +
+        'PRIMARY KEY (report_date_iso, person_key)' +
+        ')');
 });
 
 module.exports = {
@@ -189,6 +199,78 @@ module.exports = {
                 if (err) reject(err);
                 else resolve();
             });
+        });
+    },
+
+    saveWeeklyBalances: (reportDateIso, balances) => {
+        return new Promise((resolve, reject) => {
+            if (!reportDateIso || !Array.isArray(balances) || balances.length === 0) {
+                resolve();
+                return;
+            }
+
+            db.serialize(() => {
+                db.run('BEGIN TRANSACTION');
+
+                const stmt = db.prepare(
+                    'INSERT INTO weekly_balances ' +
+                    '(report_date_iso, person_key, person_name, worked_minutes, target_minutes, delta_minutes) ' +
+                    'VALUES (?, ?, ?, ?, ?, ?) ' +
+                    'ON CONFLICT(report_date_iso, person_key) DO UPDATE SET ' +
+                    'person_name = excluded.person_name, ' +
+                    'worked_minutes = excluded.worked_minutes, ' +
+                    'target_minutes = excluded.target_minutes, ' +
+                    'delta_minutes = excluded.delta_minutes'
+                );
+
+                let firstError = null;
+                balances.forEach(entry => {
+                    stmt.run(
+                        reportDateIso,
+                        entry.person_key,
+                        entry.person_name,
+                        entry.worked_minutes,
+                        entry.target_minutes,
+                        entry.delta_minutes,
+                        (err) => {
+                            if (err && !firstError) {
+                                firstError = err;
+                            }
+                        }
+                    );
+                });
+
+                stmt.finalize((finalizeErr) => {
+                    if (finalizeErr && !firstError) {
+                        firstError = finalizeErr;
+                    }
+
+                    if (firstError) {
+                        db.run('ROLLBACK', () => reject(firstError));
+                        return;
+                    }
+
+                    db.run('COMMIT', (commitErr) => {
+                        if (commitErr) reject(commitErr);
+                        else resolve();
+                    });
+                });
+            });
+        });
+    },
+
+    getWeeklyBalancesHistory: () => {
+        return new Promise((resolve, reject) => {
+            db.all(
+                'SELECT report_date_iso, person_key, person_name, worked_minutes, target_minutes, delta_minutes ' +
+                'FROM weekly_balances ' +
+                'ORDER BY report_date_iso ASC, person_name ASC',
+                [],
+                (err, rows) => {
+                    if (err) reject(err);
+                    else resolve(rows);
+                }
+            );
         });
     }
 };
