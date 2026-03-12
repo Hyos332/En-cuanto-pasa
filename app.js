@@ -123,6 +123,9 @@ receiver.router.post('/api/schedule', async (req, res) => {
     // Guardar todos los slots (vaciando anteriores)
     await db.saveUserSlots(session.slackId, validatedSlots);
 
+    // Limpiar horario legacy para evitar jobs duplicados/conflictivos tras reinicios
+    await db.clearLegacySchedule(session.slackId);
+
     // HOT RELOAD: Recargar tareas en memoria inmediatamente
     await reloadUserSchedule(session.slackId);
 

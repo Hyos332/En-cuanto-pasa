@@ -316,6 +316,7 @@ const handleStopCommand = async ({ ack, command, client }) => {
 
         
         await db.saveUserSlots(slackId, []);
+        await db.clearLegacySchedule(slackId);
 
         
         
@@ -526,14 +527,16 @@ const reloadUserSchedule = async (slackId) => {
 
 const initSchedules = async () => {
     try {
-        
+        const weekly = await db.getAllWeeklySchedules();
+        const usersWithWeekly = new Set(weekly.map(s => s.slack_id));
+
         const oldSchedules = await db.getAllSchedules();
         oldSchedules.forEach(s => {
-            scheduleJob(s.slack_id, s.time, 'STOP');
+            if (!usersWithWeekly.has(s.slack_id)) {
+                scheduleJob(s.slack_id, s.time, 'STOP');
+            }
         });
 
-        
-        const weekly = await db.getAllWeeklySchedules();
         weekly.forEach(s => {
             
             

@@ -181,5 +181,14 @@ module.exports = {
                     }
                 });
         });
+    },
+
+    clearLegacySchedule: (slackId) => {
+        return new Promise((resolve, reject) => {
+            db.run('DELETE FROM schedules WHERE slack_id = ?', [slackId], (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
     }
 };
