@@ -65,9 +65,8 @@ jobs:
         SEMANAL_GSHEETS_CREDENTIALS_BASE64: ${{ secrets.SEMANAL_GSHEETS_CREDENTIALS_BASE64 }}
       run: |
         cd /srv/projects/en-cuanto-pasa
-        git fetch origin master --depth=1
-        git checkout master
-        git pull --ff-only origin master
+        git fetch --prune origin master
+        git checkout -B master origin/master
         cat > .env <<EOF
         PORT=${PORT}
         SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
