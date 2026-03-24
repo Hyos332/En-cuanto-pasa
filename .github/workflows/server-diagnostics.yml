@@ -1,0 +1,90 @@
+name: Server Diagnostics
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_docker_details:
+        description: "Incluye estado detallado de Docker"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    name: Inspect Self-Hosted Server
+    runs-on: self-hosted
+    timeout-minutes: 10
+
+    steps:
+    - name: Collect system diagnostics
+      shell: bash
+      env:
+        INCLUDE_DOCKER_DETAILS: ${{ inputs.include_docker_details }}
+      run: |
+        set -u
+
+        REPORT_DIR="$RUNNER_TEMP/server-diagnostics"
+        REPORT_FILE="$REPORT_DIR/report.txt"
+        mkdir -p "$REPORT_DIR"
+
+        exec > >(tee "$REPORT_FILE") 2>&1
+
+        section() {
+          printf '\n[%s]\n' "$1"
+        }
+
+        try_cmd() {
+          local title="$1"
+          shift
+          section "$title"
+          if command -v "${1}" >/dev/null 2>&1; then
+            "$@" || echo "Command failed: $*"
+          else
+            echo "Command not available: ${1}"
+          fi
+        }
+
+        echo "Diagnostic timestamp: $(date --iso-8601=seconds)"
+
+        try_cmd "Host" hostnamectl
+        try_cmd "Kernel" uname -a
+        try_cmd "Uptime" uptime
+        try_cmd "Logged Users" who
+        try_cmd "Memory" free -h
+        try_cmd "Swap" swapon --show
+        try_cmd "Disk Usage" df -h
+        try_cmd "Top Memory Processes" bash -lc "ps -eo pid,ppid,user,%mem,%cpu,etime,cmd --sort=-%mem | head -n 25"
+        try_cmd "Top CPU Processes" bash -lc "ps -eo pid,ppid,user,%cpu,%mem,etime,cmd --sort=-%cpu | head -n 25"
+
+        if command -v systemctl >/dev/null 2>&1; then
+          try_cmd "Failed Services" systemctl --failed --no-pager
+          section "Runner Service Status"
+          systemctl status actions.runner.* --no-pager || echo "No se pudo resolver el servicio del runner por comodin."
+        else
+          section "Services"
+          echo "systemctl no esta disponible en este servidor."
+        fi
+
+        if [ "$INCLUDE_DOCKER_DETAILS" = "true" ]; then
+          try_cmd "Docker Version" docker version
+          try_cmd "Docker Containers" docker ps -a
+          try_cmd "Docker Stats" docker stats --no-stream
+
+          if [ -d /srv/projects/en-cuanto-pasa ]; then
+            section "Compose Status"
+            docker compose -f /srv/projects/en-cuanto-pasa/docker-compose.yml ps || echo "No se pudo obtener docker compose ps."
+          else
+            section "Compose Status"
+            echo "No existe /srv/projects/en-cuanto-pasa en este runner."
+          fi
+        fi
+
+    - name: Upload diagnostic report
+      uses: actions/upload-artifact@v4
+      with:
+        name: server-diagnostics-report
+        path: ${{ runner.temp }}/server-diagnostics/report.txt
+        if-no-files-found: error
