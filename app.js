@@ -71,6 +71,8 @@ if (!useDirectSlackToken && !useSlackOAuth) {
   throw new Error('Falta SLACK_BOT_TOKEN o la configuración OAuth completa de Slack.');
 }
 
+console.log(`🔐 Slack auth mode: ${useDirectSlackToken ? 'bot token' : 'oauth installation store'}`);
+
 const receiverOptions = {
   signingSecret: process.env.SLACK_SIGNING_SECRET,
 };
