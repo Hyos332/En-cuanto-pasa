@@ -6,8 +6,6 @@ const installationStore = require('./src/utils/installationStore');
 const { handleBusCommand, handleRealTimeBusCommand } = require('./src/handlers/busHandler');
 const { handleRefreshSchedule, handleRefreshRealTime } = require('./src/handlers/actionHandler');
 const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, handleStopCommand, handleSemanalCommand, initSchedules, reloadUserSchedule, sendScheduleConfirmation, tokenStore } = require('./src/handlers/kronosHandler');
-const axios = require('axios');
-const config = require('./src/config');
 const db = require('./src/db'); 
 
 const TIME_FORMAT_REGEX = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
@@ -57,19 +55,40 @@ function normalizeSlots(rawSlots) {
   return normalized;
 }
 
-// 1. Inicializar ExpressReceiver (Servidor Web)
-const receiver = new ExpressReceiver({
+const oauthConfigured = Boolean(
+  process.env.SLACK_CLIENT_ID &&
+  process.env.SLACK_CLIENT_SECRET &&
+  process.env.SLACK_STATE_SECRET
+);
+
+if (!process.env.SLACK_SIGNING_SECRET) {
+  throw new Error('Falta SLACK_SIGNING_SECRET en el entorno.');
+}
+
+if (!process.env.SLACK_BOT_TOKEN && !oauthConfigured) {
+  throw new Error('Falta SLACK_BOT_TOKEN o la configuración OAuth completa de Slack.');
+}
+
+const receiverOptions = {
   signingSecret: process.env.SLACK_SIGNING_SECRET,
-  clientId: process.env.SLACK_CLIENT_ID,
-  clientSecret: process.env.SLACK_CLIENT_SECRET,
-  stateSecret: process.env.SLACK_STATE_SECRET,
-  scopes: ['chat:write', 'commands', 'app_mentions:read'],
-  installationStore,
-  installerOptions: {
-    installPath: '/slack/install',
-    redirectUriPath: '/slack/oauth_redirect',
-  },
-});
+};
+
+if (oauthConfigured) {
+  Object.assign(receiverOptions, {
+    clientId: process.env.SLACK_CLIENT_ID,
+    clientSecret: process.env.SLACK_CLIENT_SECRET,
+    stateSecret: process.env.SLACK_STATE_SECRET,
+    scopes: ['chat:write', 'commands', 'app_mentions:read'],
+    installationStore,
+    installerOptions: {
+      installPath: '/slack/install',
+      redirectUriPath: '/slack/oauth_redirect',
+    },
+  });
+}
+
+// 1. Inicializar ExpressReceiver (Servidor Web)
+const receiver = new ExpressReceiver(receiverOptions);
 
 // 2. Configurar rutas Web (Dashboard)
 receiver.router.use('/static', express.static(path.join(__dirname, 'src/public')));
@@ -139,10 +158,16 @@ receiver.router.post('/api/schedule', async (req, res) => {
   }
 });
 
-// 3. Inicializar App de Bolt con ese receiver
-const app = new App({
+const appOptions = {
   receiver,
-});
+};
+
+if (process.env.SLACK_BOT_TOKEN) {
+  appOptions.token = process.env.SLACK_BOT_TOKEN;
+}
+
+// 3. Inicializar App de Bolt con ese receiver
+const app = new App(appOptions);
 
 // Middleware de Debug Global
 app.use(async ({ logger, body, next }) => {
@@ -173,24 +198,6 @@ app.action('refresh_realtime_btn', handleRefreshRealTime);
 
 // --- EVENTOS ---
 app.event('app_mention', async ({ event, client }) => {
-  if (event.text.toLowerCase().includes('ip')) {
-    try {
-      const response = await axios.get(config.API.IPIFY);
-      await client.chat.postMessage({
-        channel: event.channel,
-        thread_ts: event.ts,
-        text: `🌐 Mi dirección IP pública es: \`${response.data.ip}\``
-      });
-    } catch (error) {
-      await client.chat.postMessage({
-        channel: event.channel,
-        thread_ts: event.ts,
-        text: `❌ Error obteniendo IP: ${error.message}`
-      });
-    }
-    return;
-  }
-
   await client.chat.postMessage({
     channel: event.channel,
     thread_ts: event.ts,
