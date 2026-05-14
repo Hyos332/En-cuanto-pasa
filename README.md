@@ -30,10 +30,12 @@ En-cuanto-pasa/
 1. Clona el repo: `git clone https://github.com/Hyos332/En-cuanto-pasa.git`
 2. Instala dependencias: `npm install`
 3. Crea tu `.env` con tus credenciales de Slack
-4. Define en `.env` las variables de Slack y `KRONOS_CREDENTIALS_SECRET` (mínimo 16 caracteres)
+4. Define en `.env` `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` y `KRONOS_CREDENTIALS_SECRET` (mínimo 16 caracteres)
 5. Ejecuta el bot: `npm start`
 6. (Opcional en local) Expón con ngrok: `ngrok http 3000`
 7. Instala el bot en Slack: `https://TU-NGROK/slack/install`
+
+Si vas a instalarlo con OAuth en vez de token directo, define también `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` y `SLACK_STATE_SECRET`.
 
 ## 📝 Comandos disponibles
 - `/bus [parada] [línea]` → Consulta tiempo real y horarios
