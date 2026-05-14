@@ -1,20 +1,10 @@
 const tusService = require('../services/tusService');
 const { buildScheduleBlocks, buildRealTimeBlocks } = require('../utils/blockBuilder');
 
-async function handleBusCommand({ ack, respond, command }) {
-    await ack();
-
+async function runBusLookup({ respond, command }) {
     const args = (command.text || '').trim().split(/\s+/).filter(Boolean);
     const stopId = args[0];
     const routeId = args[1] || '1';
-
-    if (!stopId) {
-        await respond({
-            response_type: 'ephemeral',
-            text: '❌ Por favor proporciona el ID de la parada. Ejemplo: `/bus 338`'
-        });
-        return;
-    }
 
     // 1. Intentar Tiempo Real
     const realTimeData = await tusService.getRealTimeEstimates(stopId, routeId);
@@ -46,20 +36,10 @@ async function handleBusCommand({ ack, respond, command }) {
     });
 }
 
-async function handleRealTimeBusCommand({ ack, respond, command }) {
-    await ack();
-
+async function runRealTimeLookup({ respond, command }) {
     const args = (command.text || '').trim().split(/\s+/).filter(Boolean);
     const stopId = args[0];
     const routeId = args[1] || '1';
-
-    if (!stopId) {
-        await respond({
-            response_type: 'ephemeral',
-            text: '❌ Por favor proporciona el ID de la parada. Ejemplo: `/realTimeBus 338`'
-        });
-        return;
-    }
 
     const estimates = await tusService.getRealTimeEstimates(stopId, routeId);
 
@@ -75,6 +55,56 @@ async function handleRealTimeBusCommand({ ack, respond, command }) {
         response_type: 'in_channel',
         blocks: buildRealTimeBlocks(estimates, stopId, routeId),
         text: `Tiempo real parada ${stopId}`
+    });
+}
+
+async function handleBusCommand({ ack, respond, command }) {
+    const args = (command.text || '').trim().split(/\s+/).filter(Boolean);
+
+    if (!args[0]) {
+        await ack({
+            response_type: 'ephemeral',
+            text: '❌ Por favor proporciona el ID de la parada. Ejemplo: `/bus 338`'
+        });
+        return;
+    }
+
+    await ack({
+        response_type: 'ephemeral',
+        text: '🔍 Consultando estimaciones en tiempo real y horarios programados...'
+    });
+
+    runBusLookup({ respond, command }).catch(async (error) => {
+        console.error('❌ Error en /bus:', error);
+        await respond({
+            response_type: 'ephemeral',
+            text: `❌ Error consultando buses: ${error.message}`
+        });
+    });
+}
+
+async function handleRealTimeBusCommand({ ack, respond, command }) {
+    const args = (command.text || '').trim().split(/\s+/).filter(Boolean);
+
+    if (!args[0]) {
+        await ack({
+            response_type: 'ephemeral',
+            text: '❌ Por favor proporciona el ID de la parada. Ejemplo: `/realTimeBus 338`'
+        });
+        return;
+    }
+
+    await ack({
+        response_type: 'ephemeral',
+        text: '🔍 Consultando estimaciones en tiempo real...'
+    });
+
+    runRealTimeLookup({ respond, command }).catch(async (error) => {
+        console.error('❌ Error en /realTimeBus:', error);
+        await respond({
+            response_type: 'ephemeral',
+            text: `❌ Error consultando tiempo real: ${error.message}`
+        });
     });
 }
 
