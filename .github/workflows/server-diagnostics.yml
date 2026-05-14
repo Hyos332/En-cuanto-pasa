@@ -73,12 +73,12 @@ jobs:
           try_cmd "Docker Containers" docker ps -a
           try_cmd "Docker Stats" docker stats --no-stream
 
-          if [ -d /srv/projects/en-cuanto-pasa ]; then
+          if [ -d /srv/projects/En-cuanto-pasa ]; then
             section "Compose Status"
-            docker compose -f /srv/projects/en-cuanto-pasa/docker-compose.yml ps || echo "No se pudo obtener docker compose ps."
+            docker compose -f /srv/projects/En-cuanto-pasa/docker-compose.yml ps || echo "No se pudo obtener docker compose ps."
           else
             section "Compose Status"
-            echo "No existe /srv/projects/en-cuanto-pasa en este runner."
+            echo "No existe /srv/projects/En-cuanto-pasa en este runner."
           fi
         fi
 
