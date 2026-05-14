@@ -9,6 +9,8 @@ function startBot() {
     process.env.SLACK_CLIENT_SECRET &&
     process.env.SLACK_STATE_SECRET
   );
+  const useDirectSlackToken = Boolean(process.env.SLACK_BOT_TOKEN);
+  const useSlackOAuth = !useDirectSlackToken && oauthConfigured;
 
   const appConfig = {
     signingSecret: process.env.SLACK_SIGNING_SECRET,
@@ -19,15 +21,15 @@ function startBot() {
     throw new Error('Falta SLACK_SIGNING_SECRET en el entorno.');
   }
 
-  if (!process.env.SLACK_BOT_TOKEN && !oauthConfigured) {
+  if (!useDirectSlackToken && !useSlackOAuth) {
     throw new Error('Falta SLACK_BOT_TOKEN o la configuración OAuth completa de Slack.');
   }
 
-  if (process.env.SLACK_BOT_TOKEN) {
+  if (useDirectSlackToken) {
     appConfig.token = process.env.SLACK_BOT_TOKEN;
   }
 
-  if (oauthConfigured) {
+  if (useSlackOAuth) {
     Object.assign(appConfig, {
       clientId: process.env.SLACK_CLIENT_ID,
       clientSecret: process.env.SLACK_CLIENT_SECRET,
