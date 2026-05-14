@@ -30,21 +30,13 @@
     "@slack/bolt": "^3.14.0",
     "axios": "^1.5.0",
     "dotenv": "^16.3.1",
-    "exceljs": "^4.4.0",
-    "googleapis": "^144.0.0",
-    "node-cache": "^5.1.2",
-    "node-schedule": "^2.1.1",
-    "puppeteer": "^24.33.0",
-    "sqlite3": "^5.1.7"
+    "node-cache": "^5.1.2"
   },
   "devDependencies": {
     "audit-ci": "^6.6.1",
     "eslint": "^8.0.0",
     "jest": "^29.0.0",
     "nodemon": "^3.0.1"
-  },
-  "overrides": {
-    "node-gyp": "^10.2.0"
   },
   "engines": {
     "node": ">=14.0.0"
