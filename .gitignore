@@ -79,3 +79,5 @@ pids/
 
 # Yarn Integrity file
 .yarn-integrity
+
+._sites
