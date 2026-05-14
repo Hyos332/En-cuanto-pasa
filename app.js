@@ -5,7 +5,7 @@ const path = require('path');
 const config = require('./src/config');
 const { handleBusCommand, handleRealTimeBusCommand } = require('./src/handlers/busHandler');
 const { handleRefreshSchedule, handleRefreshRealTime } = require('./src/handlers/actionHandler');
-const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, handleStopCommand, handleSemanalCommand, initSchedules, reloadUserSchedule, sendScheduleConfirmation, tokenStore } = require('./src/handlers/kronosHandler');
+const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, handleStopCommand, handleEstadoCommand, handleSemanalCommand, initSchedules, reloadUserSchedule, sendScheduleConfirmation, tokenStore } = require('./src/handlers/kronosHandler');
 const db = require('./src/db'); 
 
 config.requireRuntimeConfig();
@@ -165,6 +165,7 @@ if (typeof handleStopCommand !== 'function') {
 }
 
 app.command('/stop', handleStopCommand);
+app.command('/estado', handleEstadoCommand);
 app.command('/semanal', handleSemanalCommand);
 // app.command('/horario', handleScheduleCommand); // Legacy
 app.command('/programar', handleScheduleCommand);

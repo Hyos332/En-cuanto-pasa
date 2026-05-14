@@ -71,6 +71,15 @@ const tokenStore = new Map();
 
 const SEMANAL_TARGETS = getSemanalTargets();
 const SEMANAL_TARGET_PEOPLE = SEMANAL_TARGETS.map(target => target.name);
+const DAYS_BY_CODE = {
+    0: 'Domingo',
+    1: 'Lunes',
+    2: 'Martes',
+    3: 'Miércoles',
+    4: 'Jueves',
+    5: 'Viernes',
+    6: 'Sábado'
+};
 
 function formatDateParts(dateUtc) {
     const day = String(dateUtc.getUTCDate()).padStart(2, '0');
@@ -172,6 +181,101 @@ function isSemanalAllowed(command) {
 
     return isAllowedByUsername || isAllowedById;
 }
+
+function getNextSlot(slots) {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const currentMinutes = (now.getHours() * 60) + now.getMinutes();
+
+    return slots
+        .filter(slot => slot.is_active)
+        .flatMap(slot => {
+            const candidates = [];
+            if (slot.start_time) candidates.push({ ...slot, type: 'START', time: slot.start_time });
+            if (slot.end_time) candidates.push({ ...slot, type: 'STOP', time: slot.end_time });
+            return candidates;
+        })
+        .map(slot => {
+            const [hour, minute] = slot.time.split(':').map(Number);
+            const slotMinutes = (hour * 60) + minute;
+            let daysUntil = slot.day_of_week - currentDay;
+
+            if (daysUntil < 0 || (daysUntil === 0 && slotMinutes <= currentMinutes)) {
+                daysUntil += 7;
+            }
+
+            return {
+                ...slot,
+                daysUntil,
+                sortValue: (daysUntil * 1440) + slotMinutes
+            };
+        })
+        .sort((a, b) => a.sortValue - b.sortValue)[0] || null;
+}
+
+function formatScheduleSummary(slots) {
+    const activeSlots = slots.filter(slot => slot.is_active);
+
+    if (activeSlots.length === 0) {
+        return '• Sin horarios activos. Modo manual elegante.';
+    }
+
+    const grouped = activeSlots.reduce((acc, slot) => {
+        if (!acc[slot.day_of_week]) acc[slot.day_of_week] = [];
+        acc[slot.day_of_week].push(`${slot.start_time} - ${slot.end_time}`);
+        return acc;
+    }, {});
+
+    return Object.keys(grouped)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .map(dayCode => `• ${DAYS_BY_CODE[dayCode] || `Día ${dayCode}`}: ${grouped[dayCode].sort().join(', ')}`)
+        .join('\n');
+}
+
+function formatNextSlot(nextSlot) {
+    if (!nextSlot) {
+        return 'Sin próxima acción programada. El piloto automático está tomando café.';
+    }
+
+    const action = nextSlot.type === 'START' ? '🚀 Iniciar jornada' : '🛑 Detener jornada';
+    const day = nextSlot.daysUntil === 0 ? 'hoy' : `${DAYS_BY_CODE[nextSlot.day_of_week] || `día ${nextSlot.day_of_week}`}`;
+
+    return `${action} ${day} a las ${nextSlot.time}`;
+}
+
+const handleEstadoCommand = async ({ ack, command, respond }) => {
+    await ack();
+
+    try {
+        const slackId = command.user_id;
+        const [user, slots] = await Promise.all([
+            db.getUser(slackId),
+            db.getWeeklySchedule(slackId)
+        ]);
+
+        const hasCredentials = Boolean(user?.kronos_user && user?.kronos_password);
+        const activeSlots = slots.filter(slot => slot.is_active);
+        const nextSlot = getNextSlot(slots);
+        const kronosStatus = hasCredentials ? 'conectado como `' + user.kronos_user + '`' : 'sin credenciales todavía';
+
+        await respond({
+            response_type: 'ephemeral',
+            text: '🧠 *Estado del piloto automático*\n\n' +
+                `🔐 Kronos: ${kronosStatus}\n` +
+                `📅 Horarios activos: ${activeSlots.length}\n` +
+                `${formatScheduleSummary(slots)}\n\n` +
+                `⏭️ Próxima acción:\n${formatNextSlot(nextSlot)}\n\n` +
+                '_Diagnóstico emocional: estable, con ganas de fichar a tiempo._'
+        });
+    } catch (error) {
+        console.error('Error in /estado command:', error);
+        await respond({
+            response_type: 'ephemeral',
+            text: `❌ No pude revisar tu estado: ${error.message}`
+        });
+    }
+};
 
 const handleLoginCommand = async ({ ack, command, client }) => {
     
@@ -672,6 +776,7 @@ module.exports = {
     handlePanelCommand,
     handleScheduleCommand,
     handleStopCommand,
+    handleEstadoCommand,
     handleSemanalCommand,
     initSchedules,
     reloadUserSchedule,
