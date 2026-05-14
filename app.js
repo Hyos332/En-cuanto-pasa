@@ -169,9 +169,13 @@ if (process.env.SLACK_BOT_TOKEN) {
 // 3. Inicializar App de Bolt con ese receiver
 const app = new App(appOptions);
 
+app.error(async (error) => {
+  console.error('❌ Slack app error:', error);
+});
+
 // Middleware de Debug Global
-app.use(async ({ logger, body, next }) => {
-  // ... (debug logs)
+app.use(async ({ body, next }) => {
+  console.log('📩 Slack request:', body?.command || body?.type || 'unknown');
   await next();
 });
 

@@ -91,3 +91,5 @@ jobs:
         SEMANAL_GSHEETS_CREDENTIALS_BASE64=${SEMANAL_GSHEETS_CREDENTIALS_BASE64}
         EOF
         docker compose up -d --build --remove-orphans
+        docker compose ps
+        curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:${PORT}/health"
