@@ -11,6 +11,16 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const db = new sqlite3.Database(dbPath);
+db.configure('busyTimeout', 5000);
+
+function runSql(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.run(sql, params, function onRun(err) {
+            if (err) reject(err);
+            else resolve(this);
+        });
+    });
+}
 
 function mapUserRowWithDecryptedPassword(row) {
     if (!row) {
@@ -24,6 +34,9 @@ function mapUserRowWithDecryptedPassword(row) {
 }
 
 db.serialize(() => {
+    db.run('PRAGMA journal_mode=WAL');
+    db.run('PRAGMA foreign_keys=ON');
+
     db.run('CREATE TABLE IF NOT EXISTS users (' +
         'slack_id TEXT PRIMARY KEY,' +
         'kronos_user TEXT,' +
@@ -101,45 +114,26 @@ module.exports = {
                 });
         });
     },
-    // --- NUEVO --- (Gestión de Horario Semanal)
-    saveDaySchedule: (slackId, day, start, end, active) => {
-        return new Promise((resolve, reject) => {
-            // day: 1-5 (Lunes-Viernes)
-            db.run(`INSERT OR REPLACE INTO weekly_schedules 
-                (slack_id, day_of_week, start_time, end_time, is_active) 
-                VALUES (?, ?, ?, ?, ?)`,
-                [slackId, day, start, end, active ? 1 : 0], (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                });
-        });
-    },
-
     // --- NUEVO V2 (Multi-Slot) ---
     // Reemplaza TODOS los slots de un usuario por los nuevos (limpieza total)
-    saveUserSlots: (slackId, slots) => {
-        return new Promise((resolve, reject) => {
-            db.serialize(() => {
-                db.run('BEGIN TRANSACTION');
+    saveUserSlots: async (slackId, slots) => {
+        await runSql('BEGIN IMMEDIATE TRANSACTION');
 
-                // 1. Borrar horarios viejos
-                db.run('DELETE FROM time_slots WHERE slack_id = ?', [slackId]);
+        try {
+            await runSql('DELETE FROM time_slots WHERE slack_id = ?', [slackId]);
 
-                // 2. Insertar nuevos
-                const stmt = db.prepare('INSERT INTO time_slots (slack_id, day_of_week, start_time, end_time, is_active) VALUES (?, ?, ?, ?, ?)');
+            for (const slot of slots) {
+                await runSql(
+                    'INSERT INTO time_slots (slack_id, day_of_week, start_time, end_time, is_active) VALUES (?, ?, ?, ?, ?)',
+                    [slackId, slot.day_of_week, slot.start_time, slot.end_time, slot.is_active ? 1 : 0]
+                );
+            }
 
-                slots.forEach(slot => {
-                    stmt.run(slackId, slot.day_of_week, slot.start_time, slot.end_time, slot.is_active ? 1 : 0);
-                });
-
-                stmt.finalize();
-
-                db.run('COMMIT', (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                });
-            });
-        });
+            await runSql('COMMIT');
+        } catch (error) {
+            await runSql('ROLLBACK').catch(() => {});
+            throw error;
+        }
     },
 
     // Lee la tabla nueva time_slots
@@ -202,17 +196,16 @@ module.exports = {
         });
     },
 
-    saveWeeklyBalances: (reportDateIso, balances) => {
-        return new Promise((resolve, reject) => {
-            if (!reportDateIso || !Array.isArray(balances) || balances.length === 0) {
-                resolve();
-                return;
-            }
+    saveWeeklyBalances: async (reportDateIso, balances) => {
+        if (!reportDateIso || !Array.isArray(balances) || balances.length === 0) {
+            return;
+        }
 
-            db.serialize(() => {
-                db.run('BEGIN TRANSACTION');
+        await runSql('BEGIN IMMEDIATE TRANSACTION');
 
-                const stmt = db.prepare(
+        try {
+            for (const entry of balances) {
+                await runSql(
                     'INSERT INTO weekly_balances ' +
                     '(report_date_iso, person_key, person_name, worked_minutes, target_minutes, delta_minutes) ' +
                     'VALUES (?, ?, ?, ?, ?, ?) ' +
@@ -220,43 +213,23 @@ module.exports = {
                     'person_name = excluded.person_name, ' +
                     'worked_minutes = excluded.worked_minutes, ' +
                     'target_minutes = excluded.target_minutes, ' +
-                    'delta_minutes = excluded.delta_minutes'
-                );
-
-                let firstError = null;
-                balances.forEach(entry => {
-                    stmt.run(
+                    'delta_minutes = excluded.delta_minutes',
+                    [
                         reportDateIso,
                         entry.person_key,
                         entry.person_name,
                         entry.worked_minutes,
                         entry.target_minutes,
-                        entry.delta_minutes,
-                        (err) => {
-                            if (err && !firstError) {
-                                firstError = err;
-                            }
-                        }
-                    );
-                });
+                        entry.delta_minutes
+                    ]
+                );
+            }
 
-                stmt.finalize((finalizeErr) => {
-                    if (finalizeErr && !firstError) {
-                        firstError = finalizeErr;
-                    }
-
-                    if (firstError) {
-                        db.run('ROLLBACK', () => reject(firstError));
-                        return;
-                    }
-
-                    db.run('COMMIT', (commitErr) => {
-                        if (commitErr) reject(commitErr);
-                        else resolve();
-                    });
-                });
-            });
-        });
+            await runSql('COMMIT');
+        } catch (error) {
+            await runSql('ROLLBACK').catch(() => {});
+            throw error;
+        }
     },
 
     getWeeklyBalancesHistory: () => {

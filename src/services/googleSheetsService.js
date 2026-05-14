@@ -1,16 +1,16 @@
 const { google } = require('googleapis');
+const config = require('../config');
 const { formatMinutesClock, formatWeekLabelFromIso } = require('../utils/semanalReport');
 
 const SHEETS_SCOPE = ['https://www.googleapis.com/auth/spreadsheets'];
 
 function isGoogleSheetsEnabled() {
-    const raw = (process.env.SEMANAL_GSHEETS_ENABLED || '').trim().toLowerCase();
-    return ['1', 'true', 'yes', 'si'].includes(raw);
+    return ['1', 'true', 'yes', 'si'].includes(config.GOOGLE_SHEETS.ENABLED);
 }
 
 function parseGoogleCredentials() {
-    const jsonInline = process.env.SEMANAL_GSHEETS_CREDENTIALS_JSON;
-    const base64 = process.env.SEMANAL_GSHEETS_CREDENTIALS_BASE64;
+    const jsonInline = config.GOOGLE_SHEETS.CREDENTIALS_JSON;
+    const base64 = config.GOOGLE_SHEETS.CREDENTIALS_BASE64;
 
     let credentials = null;
     if (jsonInline) {
@@ -301,12 +301,12 @@ async function syncSemanalSheet({ matrix, title = 'Horas Extra', reportDate }) {
         return { enabled: false, synced: false };
     }
 
-    const spreadsheetId = (process.env.SEMANAL_GSHEETS_SPREADSHEET_ID || '').trim();
+    const spreadsheetId = config.GOOGLE_SHEETS.SPREADSHEET_ID;
     if (!spreadsheetId) {
         throw new Error('Falta SEMANAL_GSHEETS_SPREADSHEET_ID para sincronizar Google Sheets.');
     }
 
-    const sheetName = (process.env.SEMANAL_GSHEETS_SHEET_NAME || 'Horas Extra Bot').trim();
+    const sheetName = config.GOOGLE_SHEETS.SHEET_NAME;
     const sheets = await getSheetsClient();
     const sheetId = await ensureSheet(sheets, spreadsheetId, sheetName);
 

@@ -20,7 +20,9 @@ class TusService {
 
         try {
             console.log(`🌐 Llamando a API Programación para parada ${stopId}, línea ${routeId}`);
-            const response = await axios.get(config.API.TUS_SCHEDULE);
+            const response = await axios.get(config.API.TUS_SCHEDULE, {
+                timeout: config.SETTINGS.TUS_REQUEST_TIMEOUT_MS
+            });
 
             const stopIdStr = stopId.toString();
             const routeIdStr = routeId.toString();
@@ -85,7 +87,9 @@ class TusService {
 
         try {
             console.log(`🌐 Llamando a API Tiempo Real para parada ${stopId}, línea ${routeId}`);
-            const response = await axios.get(config.API.TUS_ESTIMATES);
+            const response = await axios.get(config.API.TUS_ESTIMATES, {
+                timeout: config.SETTINGS.TUS_REQUEST_TIMEOUT_MS
+            });
 
             const stopIdStr = stopId.toString();
             const routeIdStr = routeId.toString();

@@ -1,7 +1,13 @@
 const puppeteer = require('puppeteer');
+const config = require('../config');
+const { createConcurrencyLimiter } = require('../utils/concurrencyLimiter');
 
 const KRONOS_URL = 'https://kronos.ctdesarrollo-sdr.org/mi-tiempo-hoy';
 const KRONOS_BASE_URL = 'https://kronos.ctdesarrollo-sdr.org/';
+const limitKronos = createConcurrencyLimiter({
+    max: config.KRONOS.MAX_CONCURRENCY,
+    label: 'Kronos'
+});
 
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -10,11 +16,13 @@ function delay(ms) {
 async function launchKronosPage() {
     const browser = await puppeteer.launch({
         headless: true,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+        executablePath: config.KRONOS.PUPPETEER_EXECUTABLE_PATH,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
     const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(config.KRONOS.NAVIGATION_TIMEOUT_MS);
+    page.setDefaultTimeout(config.KRONOS.NAVIGATION_TIMEOUT_MS);
     return { browser, page };
 }
 
@@ -466,7 +474,7 @@ async function extractReportUserByUsername(page, targetUsername, timeout = 45000
     return found;
 }
 
-async function stopTimer(username, password) {
+async function runStopTimer(username, password) {
     let browser;
     try {
         const launched = await launchKronosPage();
@@ -554,7 +562,7 @@ async function stopTimer(username, password) {
     }
 }
 
-async function startTimer(username, password) {
+async function runStartTimer(username, password) {
     let browser;
     try {
         const launched = await launchKronosPage();
@@ -630,7 +638,7 @@ async function startTimer(username, password) {
     }
 }
 
-async function getWeeklyReportsFirstPerson(username, password) {
+async function runGetWeeklyReportsFirstPerson(username, password) {
     let browser;
 
     try {
@@ -683,7 +691,7 @@ async function getWeeklyReportsFirstPerson(username, password) {
     }
 }
 
-async function getWeeklyReportUserHours(username, password, targetUsername) {
+async function runGetWeeklyReportUserHours(username, password, targetUsername) {
     let browser;
 
     try {
@@ -726,7 +734,7 @@ async function getWeeklyReportUserHours(username, password, targetUsername) {
     }
 }
 
-async function getWeeklyReportPeopleHours(username, password, targetPeople, options = {}) {
+async function runGetWeeklyReportPeopleHours(username, password, targetPeople, options = {}) {
     let browser;
 
     try {
@@ -812,5 +820,17 @@ async function getWeeklyReportPeopleHours(username, password, targetPeople, opti
         if (browser) await browser.close();
     }
 }
+
+const stopTimer = (username, password) => limitKronos(() => runStopTimer(username, password));
+const startTimer = (username, password) => limitKronos(() => runStartTimer(username, password));
+const getWeeklyReportsFirstPerson = (username, password) => {
+    return limitKronos(() => runGetWeeklyReportsFirstPerson(username, password));
+};
+const getWeeklyReportUserHours = (username, password, targetUsername) => {
+    return limitKronos(() => runGetWeeklyReportUserHours(username, password, targetUsername));
+};
+const getWeeklyReportPeopleHours = (username, password, targetPeople, options = {}) => {
+    return limitKronos(() => runGetWeeklyReportPeopleHours(username, password, targetPeople, options));
+};
 
 module.exports = { stopTimer, startTimer, getWeeklyReportsFirstPerson, getWeeklyReportUserHours, getWeeklyReportPeopleHours };

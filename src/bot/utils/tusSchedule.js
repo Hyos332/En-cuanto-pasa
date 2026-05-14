@@ -1,4 +1,5 @@
 const axios = require('axios');
+const config = require('../../config');
 
 function convertirHora(horaString) {
   const totalSegundos = parseInt(horaString);
@@ -25,7 +26,9 @@ function formatSchedule(schedule) {
 
 async function getTusSchedule(stopId, routeId) {
   try {
-    const response = await axios.get('http://datos.santander.es/api/rest/datasets/programacionTUS_horariosLineas.json');
+    const response = await axios.get(config.API.TUS_SCHEDULE, {
+      timeout: config.SETTINGS.TUS_REQUEST_TIMEOUT_MS
+    });
     const stopIdStr = stopId.toString();
     const routeIdStr = routeId.toString();
     const schedules = response.data.resources.filter(item => {

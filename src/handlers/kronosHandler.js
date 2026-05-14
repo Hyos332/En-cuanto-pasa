@@ -1,5 +1,6 @@
 const db = require('../db');
 const kronosService = require('../services/kronosService');
+const config = require('../config');
 const schedule = require('node-schedule');
 const crypto = require('crypto');
 const { WebClient } = require('@slack/web-api');
@@ -22,8 +23,8 @@ const jobs = {};
 
 
 async function getSlackToken() {
-    if (process.env.SLACK_BOT_TOKEN) {
-        return process.env.SLACK_BOT_TOKEN;
+    if (config.SLACK.BOT_TOKEN) {
+        return config.SLACK.BOT_TOKEN;
     }
 
     try {
@@ -148,16 +149,14 @@ function parseSemanalDate(rawText) {
 }
 
 function getAllowedSemanalUsernames() {
-    const configured = process.env.SEMANAL_ALLOWED_USERNAMES || 'diego.moys';
-    return configured
+    return config.SEMANAL.ALLOWED_USERNAMES
         .split(',')
         .map(value => value.trim().toLowerCase())
         .filter(Boolean);
 }
 
 function getAllowedSemanalUserIds() {
-    const configured = process.env.SEMANAL_ALLOWED_USER_IDS || '';
-    return configured
+    return config.SEMANAL.ALLOWED_USER_IDS
         .split(',')
         .map(value => value.trim())
         .filter(Boolean);
@@ -240,7 +239,7 @@ const handlePanelCommand = async ({ ack, command, client }) => {
     }
 
     
-    const baseUrl = 'https://en-cuanto-pasa.ctdesarrollo-sdr.org';
+    const baseUrl = config.APP.PUBLIC_BASE_URL.replace(/\/+$/, '');
     const dashboardUrl = `${baseUrl}/dashboard?token=${token}&user=${encodeURIComponent(username)}`;
 
     await client.chat.postMessage({

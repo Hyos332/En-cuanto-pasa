@@ -1,3 +1,5 @@
+const config = require('../config');
+
 const DEFAULT_SEMANAL_TARGETS = [
     { name: 'Diego Moys', weeklyTargetHours: 30 },
     { name: 'Bryan Baquedano', weeklyTargetHours: 25 },
@@ -45,7 +47,7 @@ function parseConfiguredTargets(rawValue) {
 }
 
 function getSemanalTargets() {
-    const configured = parseConfiguredTargets(process.env.SEMANAL_WEEKLY_TARGETS);
+    const configured = parseConfiguredTargets(config.SEMANAL.WEEKLY_TARGETS);
     const source = configured.length > 0 ? configured : DEFAULT_SEMANAL_TARGETS;
 
     return source.map(target => ({

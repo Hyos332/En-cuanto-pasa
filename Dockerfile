@@ -20,8 +20,7 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 COPY package*.json ./
 
-# Instalar dependencias de Node
-RUN npm install
+RUN npm ci --omit=dev
 
 COPY ./ ./
 

@@ -1,4 +1,5 @@
 const axios = require('axios');
+const config = require('../../config');
 
 function formatRealTimeSchedule(schedule) {
   if (schedule.noBusesActive) {
@@ -25,7 +26,9 @@ function formatRealTimeSchedule(schedule) {
 
 async function getTusRealTimeEstimates(stopId, routeId) {
   try {
-    const response = await axios.get('https://datos.santander.es/api/rest/datasets/control_flotas_estimaciones.json');
+    const response = await axios.get(config.API.TUS_ESTIMATES, {
+      timeout: config.SETTINGS.TUS_REQUEST_TIMEOUT_MS
+    });
     const stopIdStr = stopId.toString();
     const routeIdStr = routeId.toString();
     const estimates = response.data.resources.filter(item => {

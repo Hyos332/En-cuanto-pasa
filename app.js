@@ -2,11 +2,13 @@ require('dotenv').config();
 const { App, ExpressReceiver } = require('@slack/bolt');
 const express = require('express');
 const path = require('path');
-const installationStore = require('./src/utils/installationStore');
+const config = require('./src/config');
 const { handleBusCommand, handleRealTimeBusCommand } = require('./src/handlers/busHandler');
 const { handleRefreshSchedule, handleRefreshRealTime } = require('./src/handlers/actionHandler');
 const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, handleStopCommand, handleSemanalCommand, initSchedules, reloadUserSchedule, sendScheduleConfirmation, tokenStore } = require('./src/handlers/kronosHandler');
 const db = require('./src/db'); 
+
+config.requireRuntimeConfig();
 
 const TIME_FORMAT_REGEX = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
 
@@ -55,41 +57,11 @@ function normalizeSlots(rawSlots) {
   return normalized;
 }
 
-const oauthConfigured = Boolean(
-  process.env.SLACK_CLIENT_ID &&
-  process.env.SLACK_CLIENT_SECRET &&
-  process.env.SLACK_STATE_SECRET
-);
-const useDirectSlackToken = Boolean(process.env.SLACK_BOT_TOKEN);
-const useSlackOAuth = !useDirectSlackToken && oauthConfigured;
-
-if (!process.env.SLACK_SIGNING_SECRET) {
-  throw new Error('Falta SLACK_SIGNING_SECRET en el entorno.');
-}
-
-if (!useDirectSlackToken && !useSlackOAuth) {
-  throw new Error('Falta SLACK_BOT_TOKEN o la configuración OAuth completa de Slack.');
-}
-
-console.log(`🔐 Slack auth mode: ${useDirectSlackToken ? 'bot token' : 'oauth installation store'}`);
+console.log('🔐 Slack auth mode: bot token');
 
 const receiverOptions = {
-  signingSecret: process.env.SLACK_SIGNING_SECRET,
+  signingSecret: config.SLACK.SIGNING_SECRET,
 };
-
-if (useSlackOAuth) {
-  Object.assign(receiverOptions, {
-    clientId: process.env.SLACK_CLIENT_ID,
-    clientSecret: process.env.SLACK_CLIENT_SECRET,
-    stateSecret: process.env.SLACK_STATE_SECRET,
-    scopes: ['chat:write', 'commands', 'app_mentions:read'],
-    installationStore,
-    installerOptions: {
-      installPath: '/slack/install',
-      redirectUriPath: '/slack/oauth_redirect',
-    },
-  });
-}
 
 // 1. Inicializar ExpressReceiver (Servidor Web)
 const receiver = new ExpressReceiver(receiverOptions);
@@ -164,11 +136,8 @@ receiver.router.post('/api/schedule', async (req, res) => {
 
 const appOptions = {
   receiver,
+  token: config.SLACK.BOT_TOKEN,
 };
-
-if (useDirectSlackToken) {
-  appOptions.token = process.env.SLACK_BOT_TOKEN;
-}
 
 // 3. Inicializar App de Bolt con ese receiver
 const app = new App(appOptions);
@@ -236,11 +205,11 @@ app.command('/botversion', async ({ ack, respond }) => {
 });
 
 (async () => {
-  await app.start(process.env.PORT || 3000);
+  await app.start(config.APP.PORT);
   await initSchedules();
   console.log('='.repeat(80));
   console.log('⚡️ BOT INICIADO - VERSION 3.0.2 - KRONOS ENABLED');
   console.log('🕒 Timestamp:', new Date().toISOString());
-  console.log('🔌 Puerto:', process.env.PORT || 3000);
+  console.log('🔌 Puerto:', config.APP.PORT);
   console.log('='.repeat(80));
 })();

@@ -1,10 +1,11 @@
 const crypto = require('crypto');
+const config = require('../config');
 
 const ENCRYPTION_PREFIX = 'enc:v1';
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
 
 function getEncryptionKey() {
-    const rawSecret = process.env.KRONOS_CREDENTIALS_SECRET;
+    const rawSecret = config.KRONOS.CREDENTIALS_SECRET;
 
     if (!rawSecret || rawSecret.trim().length < 16) {
         throw new Error('KRONOS_CREDENTIALS_SECRET must be set with at least 16 characters.');
