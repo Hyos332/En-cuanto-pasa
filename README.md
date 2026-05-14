@@ -6,7 +6,7 @@ Bot de Slack que te dice en tiempo real cuántos minutos faltan para que llegue 
 - Consulta buses en tiempo real (API oficial de TUS)
 - Muestra distancia y minutos ajustados (-3 min)
 - Respaldo con horarios programados si no hay buses activos
-- Comandos: `/bus`, `/bushelp`, `/cancion`
+- Comandos: `/bus`, `/realTimeBus`, `/bushelp`, `/cancion`, `/login`, `/panel`, `/stop`, `/semanal`
 - Fácil de instalar y usar
 
 ## 📦 Estructura del proyecto
@@ -30,12 +30,12 @@ En-cuanto-pasa/
 1. Clona el repo: `git clone https://github.com/Hyos332/En-cuanto-pasa.git`
 2. Instala dependencias: `npm install`
 3. Crea tu `.env` con tus credenciales de Slack
-4. Define en `.env` `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET` y `KRONOS_CREDENTIALS_SECRET` (mínimo 16 caracteres)
+4. Define en `.env` `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `KRONOS_CREDENTIALS_SECRET` (mínimo 16 caracteres) y `PUBLIC_BASE_URL`
 5. Ejecuta el bot: `npm start`
 6. (Opcional en local) Expón con ngrok: `ngrok http 3000`
 7. Instala el bot en Slack: `https://TU-NGROK/slack/install`
 
-Si vas a instalarlo con OAuth en vez de token directo, define también `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` y `SLACK_STATE_SECRET`.
+El arranque principal usa token directo (`SLACK_BOT_TOKEN`) para evitar depender de instalaciones OAuth guardadas.
 
 ## 📝 Comandos disponibles
 - `/bus [parada] [línea]` → Consulta tiempo real y horarios
