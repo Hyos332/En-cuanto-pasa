@@ -4,7 +4,7 @@ const { getTusSchedule, formatSchedule } = require('../utils/tusSchedule');
 module.exports = (app) => {
   app.command('/bus', async ({ ack, respond, command }) => {
     await ack();
-    const args = command.text.split(' ');
+    const args = (command.text || '').trim().split(/\s+/).filter(Boolean);
     const stopId = args[0];
     const routeId = args[1] || '1';
     if (!stopId) {
@@ -17,16 +17,10 @@ module.exports = (app) => {
     await respond({ response_type: 'ephemeral', text: '🔍 Consultando estimaciones en tiempo real y horarios programados...' });
     const realTimeData = await getTusRealTimeEstimates(stopId, routeId);
     if (realTimeData && !realTimeData.noBusesActive) {
-      const messageText = `🚌 holaa hola*TIEMPO REALLLLLLLL - Línea ${routeId} - Parada ${stopId}:*\n${formatRealTimeSchedule(realTimeData)}`;
-
-      console.log('📤 Enviando mensaje:', messageText);
-      
       await respond({
         response_type: 'in_channel',
-        text: messageText
+        text: `🚌 *TIEMPO REAL - Línea ${routeId} - Parada ${stopId}:*\n${formatRealTimeSchedule(realTimeData)}`
       });
-      
-      console.log('✅ Mensaje enviado correctamente');
       return;
     }
     const scheduleData = await getTusSchedule(stopId, routeId);

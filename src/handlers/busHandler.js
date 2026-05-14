@@ -4,7 +4,7 @@ const { buildScheduleBlocks, buildRealTimeBlocks } = require('../utils/blockBuil
 async function handleBusCommand({ ack, respond, command }) {
     await ack();
 
-    const args = command.text.split(' ');
+    const args = (command.text || '').trim().split(/\s+/).filter(Boolean);
     const stopId = args[0];
     const routeId = args[1] || '1';
 
@@ -49,7 +49,7 @@ async function handleBusCommand({ ack, respond, command }) {
 async function handleRealTimeBusCommand({ ack, respond, command }) {
     await ack();
 
-    const args = command.text.split(' ');
+    const args = (command.text || '').trim().split(/\s+/).filter(Boolean);
     const stopId = args[0];
     const routeId = args[1] || '1';
 
