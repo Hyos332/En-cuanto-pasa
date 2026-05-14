@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tus-slack-bot
+    env_file:
+      - .env
     ports:
       - '${PORT:-3000}:${PORT:-3000}'
     volumes:
