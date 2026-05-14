@@ -92,4 +92,18 @@ jobs:
         EOF
         docker compose up -d --build --remove-orphans
         docker compose ps
-        curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:${PORT}/health"
+        for attempt in $(seq 1 30); do
+          if curl --fail --silent --show-error --max-time 3 "http://127.0.0.1:${PORT}/health"; then
+            echo
+            echo "Healthcheck OK"
+            exit 0
+          fi
+
+          echo "Esperando a que el bot responda /health... intento ${attempt}/30"
+          docker compose ps
+          sleep 2
+        done
+
+        echo "::error::El bot no respondio /health despues del despliegue."
+        docker compose logs --tail=200 slack-bot
+        exit 1
