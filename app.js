@@ -165,7 +165,7 @@ if (typeof handleStopCommand !== 'function') {
 }
 
 app.command('/stop', handleStopCommand);
-app.command('/estado', handleEstadoCommand);
+app.command('/est', handleEstadoCommand);
 app.command('/semanal', handleSemanalCommand);
 // app.command('/horario', handleScheduleCommand); // Legacy
 app.command('/programar', handleScheduleCommand);
