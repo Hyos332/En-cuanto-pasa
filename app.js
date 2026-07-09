@@ -6,6 +6,8 @@ const config = require('./src/config');
 const { handleBusCommand, handleRealTimeBusCommand } = require('./src/handlers/busHandler');
 const { handleRefreshSchedule, handleRefreshRealTime } = require('./src/handlers/actionHandler');
 const { handleLoginCommand, handlePanelCommand, handleScheduleCommand, handleStopCommand, handleEstadoCommand, handleSemanalCommand, initSchedules, reloadUserSchedule, sendScheduleConfirmation, tokenStore } = require('./src/handlers/kronosHandler');
+const { handleServerCommand } = require('./src/handlers/serverMonitorHandler');
+const { startServerMonitorAlerts } = require('./src/services/serverMonitorService');
 const db = require('./src/db'); 
 
 config.requireRuntimeConfig();
@@ -167,6 +169,8 @@ if (typeof handleStopCommand !== 'function') {
 app.command('/stop', handleStopCommand);
 app.command('/est', handleEstadoCommand);
 app.command('/semanal', handleSemanalCommand);
+app.command('/server', handleServerCommand);
+app.command('/servidor', handleServerCommand);
 // app.command('/horario', handleScheduleCommand); // Legacy
 app.command('/programar', handleScheduleCommand);
 
@@ -193,7 +197,7 @@ app.command('/bushelp', async ({ ack, respond }) => {
   await ack();
   await respond({
     response_type: 'ephemeral',
-    text: `🚌 *Ayuda del Bot TUS*\n\nAhora con botones interactivos para actualizar la información sin reescribir comandos.\n\n• \`/bus [parada] [linea]\` - Ver horarios y tiempo real.\n• \`/realTimeBus [parada] [linea]\` - Solo tiempo real.`
+    text: '🚌 *Ayuda del Bot TUS*\n\nAhora con botones interactivos para actualizar la información sin reescribir comandos.\n\n• `/bus [parada] [linea]` - Ver horarios y tiempo real.\n• `/realTimeBus [parada] [linea]` - Solo tiempo real.'
   });
 });
 
@@ -208,6 +212,7 @@ app.command('/botversion', async ({ ack, respond }) => {
 (async () => {
   await app.start(config.APP.PORT);
   await initSchedules();
+  startServerMonitorAlerts(app.client);
   console.log('='.repeat(80));
   console.log('⚡️ BOT INICIADO - VERSION 3.0.2 - KRONOS ENABLED');
   console.log('🕒 Timestamp:', new Date().toISOString());

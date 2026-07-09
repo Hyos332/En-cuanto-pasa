@@ -15,6 +15,28 @@ function readInteger(name, fallback, options = {}) {
     return value;
 }
 
+function readNumber(name, fallback, options = {}) {
+    const rawValue = process.env[name];
+    const parsedValue = Number.parseFloat(rawValue);
+    const value = Number.isFinite(parsedValue) ? parsedValue : fallback;
+
+    if (Number.isFinite(options.min)) {
+        return Math.max(options.min, value);
+    }
+
+    return value;
+}
+
+function readBoolean(name, fallback = false) {
+    const value = readString(name).toLowerCase();
+
+    if (!value) return fallback;
+    if (['1', 'true', 'yes', 'y', 'on'].includes(value)) return true;
+    if (['0', 'false', 'no', 'n', 'off'].includes(value)) return false;
+
+    return fallback;
+}
+
 const config = {
     APP: {
         PORT: readInteger('PORT', 3000, { min: 1 }),
@@ -41,6 +63,36 @@ const config = {
         SHEET_NAME: readString('SEMANAL_GSHEETS_SHEET_NAME', 'Horas Extra Bot'),
         CREDENTIALS_BASE64: readString('SEMANAL_GSHEETS_CREDENTIALS_BASE64'),
         CREDENTIALS_JSON: readString('SEMANAL_GSHEETS_CREDENTIALS_JSON')
+    },
+    SERVER_MONITOR: {
+        ENABLED: readBoolean('SERVER_MONITOR_ENABLED', false),
+        HOST: readString('SERVER_MONITOR_HOST', '172.22.9.2'),
+        PORT: readInteger('SERVER_MONITOR_PORT', 22, { min: 1 }),
+        USERNAME: readString('SERVER_MONITOR_USERNAME'),
+        PASSWORD: readString('SERVER_MONITOR_PASSWORD'),
+        PRIVATE_KEY: readString('SERVER_MONITOR_PRIVATE_KEY'),
+        PRIVATE_KEY_PATH: readString('SERVER_MONITOR_PRIVATE_KEY_PATH'),
+        PASSPHRASE: readString('SERVER_MONITOR_PASSPHRASE'),
+        READY_TIMEOUT_MS: readInteger('SERVER_MONITOR_READY_TIMEOUT_MS', 10000, { min: 1000 }),
+        COMMAND_TIMEOUT_MS: readInteger('SERVER_MONITOR_COMMAND_TIMEOUT_MS', 12000, { min: 3000 }),
+        POLL_INTERVAL_MS: readInteger('SERVER_MONITOR_POLL_INTERVAL_MS', 300000, { min: 30000 }),
+        ALERT_COOLDOWN_MS: readInteger('SERVER_MONITOR_ALERT_COOLDOWN_MS', 1800000, { min: 60000 }),
+        ALERT_CHANNEL_ID: readString('SERVER_MONITOR_ALERT_CHANNEL_ID'),
+        DISK_PATHS: readString('SERVER_MONITOR_DISK_PATHS', '/'),
+        ALLOWED_USERNAMES: readString('SERVER_MONITOR_ALLOWED_USERNAMES'),
+        ALLOWED_USER_IDS: readString('SERVER_MONITOR_ALLOWED_USER_IDS'),
+        CPU_WARN_PERCENT: readNumber('SERVER_MONITOR_CPU_WARN_PERCENT', 85, { min: 1 }),
+        CPU_CRITICAL_PERCENT: readNumber('SERVER_MONITOR_CPU_CRITICAL_PERCENT', 95, { min: 1 }),
+        MEMORY_WARN_PERCENT: readNumber('SERVER_MONITOR_MEMORY_WARN_PERCENT', 85, { min: 1 }),
+        MEMORY_CRITICAL_PERCENT: readNumber('SERVER_MONITOR_MEMORY_CRITICAL_PERCENT', 95, { min: 1 }),
+        SWAP_WARN_PERCENT: readNumber('SERVER_MONITOR_SWAP_WARN_PERCENT', 50, { min: 1 }),
+        SWAP_CRITICAL_PERCENT: readNumber('SERVER_MONITOR_SWAP_CRITICAL_PERCENT', 80, { min: 1 }),
+        DISK_WARN_PERCENT: readNumber('SERVER_MONITOR_DISK_WARN_PERCENT', 85, { min: 1 }),
+        DISK_CRITICAL_PERCENT: readNumber('SERVER_MONITOR_DISK_CRITICAL_PERCENT', 95, { min: 1 }),
+        LOAD_WARN_PER_CORE: readNumber('SERVER_MONITOR_LOAD_WARN_PER_CORE', 1.5, { min: 0.1 }),
+        LOAD_CRITICAL_PER_CORE: readNumber('SERVER_MONITOR_LOAD_CRITICAL_PER_CORE', 2.5, { min: 0.1 }),
+        PROCESS_MEMORY_WARN_PERCENT: readNumber('SERVER_MONITOR_PROCESS_MEMORY_WARN_PERCENT', 50, { min: 1 }),
+        PROCESS_CPU_WARN_PERCENT: readNumber('SERVER_MONITOR_PROCESS_CPU_WARN_PERCENT', 90, { min: 1 })
     },
     API: {
         TUS_SCHEDULE: 'http://datos.santander.es/api/rest/datasets/programacionTUS_horariosLineas.json',
